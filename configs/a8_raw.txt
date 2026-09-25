@@ -1,0 +1,106 @@
+A.8. Experimental details and hyperparameters
+The two prompts used in our experiments were the follow-
+ing:
+14
+Jackpot! Alignment as a Maximal Lottery
+Prompt (IIA-2 options)
+"""
+Q: What is your favorite color from
+the options red and blue?
+answer in the format ’My favourite
+color is the color red.’ or
+’My favourite color is the color
+blue.’ and say nothing else after
+that. \n"
+A: My favourite color is the color
+"""
+Prompt (all other experiments)
+"""
+Q: What is your favorite color from
+the options red, blue and green?
+answer in the format ’My favourite
+color is the color red.’ ’My favourite
+color is the color blue.’ or
+’My favourite color is the color
+green.’ and say nothing else after
+that. \n
+A: My favourite color is the color
+"""
+The distributions over the preferences of the population
+were defined in ways similar to the following example:
+rankings = {
+"voter_0": [R, G, B],
+"voter_1": [G, B, R],
+"voter_2": [B, R, G]
+}
+# Example probabilities
+p = [0.33, 0.33, 0.34]
+All three copies of the Gemma model were trained using
+LoRA (Low-Rank Adaptation of Transformers) (Hu et al.,
+2021) with the following configuration:
+• Rank (r): 8
+• Alpha: 32
+• Dropout: 0.1
+Maximal Lottery Policy (SPO): See Algorithm 1 for
+a pseudocode implementation of SPO. For the Maximal
+Lottery experiments, the following hyperparameters were
+used to train the policy using the SPO:
+• RL step of SPO: we use the PPO algorithm
+• Epochs: 30
+Algorithm 1 SPO algorithm implementation
+Input: Iterations T , Preference fn. P , Num. samples
+k ≥ 2, Fix prompt x
+Output: Trained policy π
+Initialize π1 ∈ Π.
+for i = 1 to T do
+si = x
+Sample a1:k ∼ πt(si)
+Compute ri = 1
+k−1
+Pk
+j̸=i P (ai ≻ aj).
+D = {(si, ai, ri)}i∈[k]
+πt+1 ← RL-PPO (πt, D).
+end for
+Return: uniform mixture of π1:T .
+• Batch size: 128
+• Mini-batch size: 32 (split from the main batch)
+• Learning rate: 1 × 10−4
+• Value function coefficient (vf_coef): 0.0
+• Initial KL coefficient (init_kl_coef): 0.0
+• Gamma patience: 0.0 (used to estimate the value
+function)
+• Entropy coefficient: Increased to ensure exploration
+during training.
+• Epochs: 30
+• Dataset size: 211 (2048) data points.
+To help with the training, we enforce that 10% of the batch is
+a uniform sample of the three colour words " red", " green",
+" blue".
+Preference Function: The preference function used for
+the Maximal Lottery setup returns the percentage of voters
+who prefer one alternative over another in the dataset out
+of the three colours. In the edge scenarios, we explicitly
+enforce the following outputs:
+• If two alternatives are equal, it assigns a preference
+score of 0.5.
+• If one alternative is missing from the dataset, it assumes
+the present alternative is preferred (score of 1.0).
+• If both alternatives are missing, it assigns a preference
+score of 0.5.
+Reward Model for RLHF: We left the default hyperpa-
+rameter configurations of the library trl (version 0.10.1), ex-
+cept for hyperparameter center_rewards_coefficient which
+is set to 0.01. We trained the reward for 3 epochs.
+15
+Jackpot! Alignment as a Maximal Lottery
+RLHF Policy Optimization (PPO): The policy for RLHF
+was trained using the Proximal Policy Optimization (PPO)
+algorithm with the following hyperparameters:
+• Epochs: 4
+• Batch size: 16
+• Learning rate: 5 × 10−4
+• Value function coefficient (vf_coef): 0.01
+• Initial KL coefficient (init_kl_coef): 0.0 (no entropy
+regularization in this experiment)
+These configurations were chosen to ensure fair comparison.

@@ -1,0 +1,38 @@
+# Tiny CPU profile for tests/test_e2e_local.py: a randomly initialised two-layer
+# Gemma2 with a twelve-word vocabulary. Checks the wiring, not the results.
+profile: smoke
+
+model:
+  name: tiny-random          # sentinel: build a tiny Gemma2Config in process
+  dtype: float32
+  device: cpu
+
+configs: [majority, cyclic]  # one three-option population and the cyclic edge case
+methods: [rlhf, ml]
+
+data:
+  n_datapoints: 16
+  seed: 7
+
+train:
+  ml:
+    epochs: 1
+    batch_size: 4
+    mini_batch_size: 2
+    gamma: 1.0
+    vf_coef: 0.01
+  rlhf:
+    epochs: 1
+    batch_size: 4
+    mini_batch_size: 2
+    rm_epochs: 1
+
+eval:
+  n_samples: 32
+  batch_size: 8
+  max_new_tokens: 4
+  seed: 11
+
+gpu:
+  train: none
+  eval: none

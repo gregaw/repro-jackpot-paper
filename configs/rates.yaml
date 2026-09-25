@@ -1,0 +1,7 @@
+# Modal list prices (modal.com/pricing) used by scripts/report_costs.py.
+modal:
+  gpu_per_hour:
+    L40S: 1.95
+    L4: 0.80
+  cpu_per_core_hour: 0.135
+  default_cpu_cores: 2

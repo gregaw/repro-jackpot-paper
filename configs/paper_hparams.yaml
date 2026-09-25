@@ -1,0 +1,48 @@
+source: arXiv 2501.19266, Appendix A.8
+trl_version_used_by_paper: 0.10.1
+prompts:
+  three_options: "Q: What is your favorite color from the options red, blue and green?\
+    \ answer in the format 'My favourite color is the color red.' 'My favourite color\
+    \ is the color blue.' or 'My favourite color is the color green.' and say nothing\
+    \ else after that. \nA: My favourite color is the color"
+  two_options: "Q: What is your favorite color from the options red and blue? answer\
+    \ in the format 'My favourite color is the color red.' or 'My favourite color\
+    \ is the color blue.' and say nothing else after that. \nA: My favourite color\
+    \ is the color"
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+dataset:
+  n_datapoints: 2048
+spo:
+  rl_step: ppo
+  epochs: 30
+  batch_size: 128
+  mini_batch_size: 32
+  learning_rate: 0.0001
+  vf_coef: 0.0
+  gamma: 0.0            # "Gamma patience: 0.0" in the extracted text (a8_raw.txt line 71)
+  init_kl_coef: 0.0
+  entropy_coef: increased to ensure exploration (value not given)
+  uniform_colour_fraction: 0.1
+  uniform_colour_tokens:
+  - ' red'
+  - ' green'
+  - ' blue'
+  output_policy: uniform mixture of pi_1..T (Algorithm 1)
+preference_function:
+  definition: fraction of voters preferring a over b in the dataset
+  tie_score: 0.5
+  missing_one_alternative_score: 1.0
+  missing_both_score: 0.5
+reward_model:
+  epochs: 3
+  center_rewards_coefficient: 0.01
+  other: trl 0.10.1 defaults
+rlhf_ppo:
+  epochs: 4
+  batch_size: 16
+  learning_rate: 0.0005
+  vf_coef: 0.01
+  init_kl_coef: 0.0

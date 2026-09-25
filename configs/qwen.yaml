@@ -1,0 +1,44 @@
+# Qwen2.5-0.5B: an ungated model about four times cheaper than Gemma-2-2B, used
+# to screen the recipe. Same hyperparameters as experiments.yaml.
+profile: qwen
+
+model:
+  name: Qwen/Qwen2.5-0.5B
+  dtype: bfloat16
+  device: cuda
+
+configs: [majority, iia_2alt, iia_3alt, cyclic]
+methods: [rlhf, ml]
+
+data:
+  n_datapoints: 2048
+  seed: 7
+
+train:
+  ml:
+    gamma: 1.0
+    vf_coef: 0.01
+    init_kl_coef: 0.02
+    mini_batch_size: 8
+    gradient_accumulation_steps: 4
+    ppo_epochs: 2
+  rlhf:
+    epochs: 2
+    learning_rate: 1.0e-4
+    init_kl_coef: 0.2
+    mini_batch_size: 8
+    gradient_accumulation_steps: 2
+  cells:
+    rlhf:
+      iia_2alt: {init_kl_coef: 0.1}
+      cyclic: {init_kl_coef: 0.05}
+
+eval:
+  n_samples: 1000
+  batch_size: 128
+  max_new_tokens: 8
+  seed: 11
+
+gpu:
+  train: L4
+  eval: L4

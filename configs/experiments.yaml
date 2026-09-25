@@ -1,0 +1,47 @@
+# Gemma-2-2B, the paper's model. Training hyperparameters start from
+# paper_hparams.yaml (Appendix A.8) and are overridden below. Every override is
+# explained in results/reproduction_report.md ("Deviations from the paper").
+profile: paper
+
+model:
+  name: google/gemma-2-2b
+  dtype: bfloat16
+  device: cuda
+
+configs: [majority, iia_2alt, iia_3alt, cyclic]
+methods: [rlhf, ml]
+
+data:
+  n_datapoints: 2048
+  seed: 7
+
+train:
+  ml:                              # Maximal Lottery (SPO)
+    gamma: 1.0                     # A.8 reads 0.0; at 0 the preference never reaches the colour token
+    vf_coef: 0.01                  # A.8: 0.0; needed once gamma is 1
+    init_kl_coef: 0.02             # A.8: 0.0; a small anchor keeps generation parseable
+    mini_batch_size: 8             # A.8: 32; 8 x 4 accumulation is the same effective batch
+    gradient_accumulation_steps: 4
+    ppo_epochs: 2                  # trl default 4; halved for cost
+  rlhf:                            # reward model + PPO
+    epochs: 2                      # A.8: 4
+    learning_rate: 1.0e-4          # A.8: 5e-4
+    init_kl_coef: 0.2              # A.8: 0.0
+    mini_batch_size: 8             # A.8: 16 (= batch size)
+    gradient_accumulation_steps: 2
+  cells:                           # per-cell overrides, method -> config -> values
+    ml:
+      majority: {init_kl_coef: 0.01}
+    rlhf:
+      iia_2alt: {init_kl_coef: 0.1}
+      cyclic: {init_kl_coef: 0.05}
+
+eval:
+  n_samples: 1000
+  batch_size: 128
+  max_new_tokens: 8
+  seed: 11
+
+gpu:
+  train: L40S                      # 48 GB; Gemma's 256k-vocab logits do not fit PPO on a 24 GB L4
+  eval: L4
