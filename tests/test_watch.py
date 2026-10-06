@@ -73,3 +73,10 @@ def test_is_live_tolerates_decorated_states():
     assert watch.is_live("running")
     assert not watch.is_live("stopped")
     assert not watch.is_live("stopped (detached)")
+
+
+def test_parse_step_lines_ipo_tags():
+    log = ("[ipo/cyclic] step 3/480 (30s, 10.0s/step) unparsed=0.00 dist={}\n"
+           "[ipo_offline/majority] step 4/480 (40s, 10.0s/step) unparsed=0.10 dist={}\n")
+    assert [(s["stage"], s["config"]) for s in watch.parse_step_lines(log)] == [
+        ("ipo", "cyclic"), ("ipo_offline", "majority")]

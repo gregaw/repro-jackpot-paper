@@ -8,7 +8,7 @@ model:
   device: cpu
 
 configs: [majority, cyclic]  # one three-option population and the cyclic edge case
-methods: [rlhf, ml]
+methods: [rlhf, ml, ipo, ipo_offline]
 
 data:
   n_datapoints: 16
@@ -26,6 +26,12 @@ train:
     batch_size: 4
     mini_batch_size: 2
     rm_epochs: 1
+  ipo:                       # ipo_offline inherits these
+    epochs: 1
+    batch_size: 4
+    mini_batch_size: 2       # exercises the two-pass mini-batch path
+    mix_beta: 0.25           # exercises the IPO-MD sampler (ipo_offline never samples from it)
+    lr_decay_frac: 0.5
 
 eval:
   n_samples: 32

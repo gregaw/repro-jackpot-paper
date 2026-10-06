@@ -5,7 +5,7 @@ functions inside containers; the e2e test calls them directly on CPU.
 """
 
 from pipeline.models import build_causal_lm, build_tokenizer
-from pipeline.stages import data_gen, evaluate, plot, train_rlhf, train_spo
+from pipeline.stages import data_gen, evaluate, plot, train_ipo, train_rlhf, train_spo
 from pipeline.storage import Storage
 
 STAGES = ("data_gen", "train", "eval", "plot")
@@ -30,6 +30,8 @@ def make_policy_loader(storage: Storage, profile: dict):
 
 def train_one(storage: Storage, profile: dict, config_name: str, method: str,
               force: bool = False) -> dict:
+    if method in ("ipo", "ipo_offline"):
+        return train_ipo.run(storage, profile, config_name, method, force=force)
     mod = train_spo if method == "ml" else train_rlhf
     return mod.run(storage, profile, config_name, force=force)
 

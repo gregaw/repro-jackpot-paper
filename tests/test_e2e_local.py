@@ -63,6 +63,10 @@ def test_e2e_smoke(tmp_path):
                 assert all("reward_by_colour" in r for r in step_rows)
                 assert all(v["n"] >= 1 for r in step_rows
                            for v in r["reward_by_colour"].values())
+            if m in ("ipo", "ipo_offline"):
+                step_rows = [r for r in rows if r.get("kind") == "step"]
+                assert all("loss" in r and "grad_norm" in r for r in step_rows)
+                assert Storage.read_json(tdir / "mixture.json")["n_samples"] > 0
             # eval cells persist raw samples too
             esamples = Storage.read_jsonl(storage.stage_dir("eval", c, m) / "samples.jsonl")
             assert esamples and esamples[0]["texts"]

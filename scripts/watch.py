@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 STEP_RE = re.compile(
-    r"\[(?P<stage>spo|rlhf)/(?P<config>[a-z0-9_]+)\] "
+    r"\[(?P<stage>spo|rlhf|ipo|ipo_offline)/(?P<config>[a-z0-9_]+)\] "
     r"step (?P<step>\d+)/(?P<total>\d+).*?unparsed=(?P<unparsed>[0-9.]+)"
 )
 ERROR_RE = re.compile(

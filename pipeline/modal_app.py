@@ -10,8 +10,11 @@ lives on Modal and survives the client disconnecting. Poll with `--stage status`
   modal run pipeline/modal_app.py --stage chat --config cyclic --method ml
 
 JACKPOT_PROFILE=qwen selects configs/qwen.yaml instead of experiments.yaml.
+JACKPOT_TRAIN_OVERRIDES='{"ipo": {"tau": 0.05}}' merges over the profile's train
+blocks (use a distinct --run-id per override).
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -28,6 +31,7 @@ app = modal.App("jackpot-paper")
 # image, so every manifest records the sha that produced it.
 GIT_SHA = _manifest.git_sha()
 PROFILE_NAME = os.environ.get("JACKPOT_PROFILE", "paper")
+TRAIN_OVERRIDES = os.environ.get("JACKPOT_TRAIN_OVERRIDES", "")
 # GPU types are fixed when the function decorators run, so they come from the
 # profile at import time, not from CLI flags.
 _GPU = load_profile(PROFILE_NAME)["gpu"]
@@ -39,6 +43,7 @@ image = (
     .env({"HF_HOME": "/artifacts/hf_cache",
           "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
           "JACKPOT_PROFILE": PROFILE_NAME,
+          "JACKPOT_TRAIN_OVERRIDES": TRAIN_OVERRIDES,
           "JACKPOT_GIT_SHA": GIT_SHA})
     .add_local_dir(str(ROOT / "configs"), remote_path="/root/configs")
     .add_local_python_source("pipeline")
@@ -56,7 +61,9 @@ def _storage(run_id: str):
 
 
 def _profile(seed: int | None = None):
-    return load_profile(os.environ.get("JACKPOT_PROFILE", "paper"), seed=seed)
+    overrides = os.environ.get("JACKPOT_TRAIN_OVERRIDES") or "{}"
+    return load_profile(os.environ.get("JACKPOT_PROFILE", "paper"), seed=seed,
+                        train_overrides=json.loads(overrides))
 
 
 @app.function(image=image, volumes=VOLUME, secrets=[hf_secret], timeout=3600)
@@ -215,6 +222,7 @@ def main(stage: str = "all", config: str = "all", method: str = "all",
 
     call = orchestrate.spawn(stage, config, method, run_id, force, seed_opt)
     print(f"dispatched: {call.object_id} (run_id={run_id}, profile={PROFILE_NAME}, "
+          f"train_overrides={TRAIN_OVERRIDES or 'none'}, "
           f"gpu={GPU_TRAIN}/{GPU_EVAL}, seed={'profile default' if seed_opt is None else seed_opt}, "
           f"git_sha={GIT_SHA})")
     print(f"poll with: modal run pipeline/modal_app.py --stage status --run-id {run_id}")

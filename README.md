@@ -7,6 +7,16 @@ Maura-Rivero et al., *Jackpot! Alignment as a Maximal Lottery*
 populations.
 
 The full write-up is [`results/reproduction_report.md`](results/reproduction_report.md).
+The reproduction is the main result of this repository. Two documents were added to it
+afterwards:
+
+- [`results/deep-dive-overview.md`](results/deep-dive-overview.md): a walkthrough of how the
+  pipeline works, with links into the code: SPO, RLHF/PPO and the Online IPO method added later.
+- [`results/experiments_ipo_coval.md`](results/experiments_ipo_coval.md): an additional
+  experiment beyond the original paper. Online IPO, trained on the policy's own samples,
+  reaches the Maximal Lottery from its final checkpoint, while the same loss trained offline
+  reproduces Borda; the CoVal dataset of real rankings has too few voters per prompt for its
+  Borda/Condorcet disagreements to survive resampling.
 
 ## What this repository contributes
 
@@ -93,7 +103,8 @@ Layout:
 - `scripts/` — verdicts, artifact fetching, run watching, cost pricing, model export, and a
   CPU simulation of Algorithm 1
 - `tests/` — unit tests and a CPU end-to-end run of the whole pipeline
-- `results/` — the report and its figures
+- `results/` — the reproduction report and its figures, plus the two additions: the deep-dive
+  overview and the Online IPO / CoVal write-up with its figures
 
 ## Prerequisites
 

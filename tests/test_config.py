@@ -48,3 +48,26 @@ def test_profiles_load_and_agree_on_the_recipe():
 def test_unknown_method():
     with pytest.raises(ValueError):
         train_params(load_profile("paper"), "dpo")
+
+
+def test_ipo_offline_inherits_the_online_arm_settings():
+    profile = load_profile("paper")
+    profile["train"] = {
+        "ipo": {"tau": 0.05, "batch_size": 64},
+        "ipo_offline": {"batch_size": 32},
+        "cells": {"ipo": {"cyclic": {"tau": 0.01}}},
+    }
+    online, offline = train_params(profile, "ipo"), train_params(profile, "ipo_offline")
+    assert online["tau"] == offline["tau"] == 0.05
+    assert online["batch_size"] == 64 and offline["batch_size"] == 32
+    assert online["epochs"] == train_params(profile, "ml")["epochs"]   # SPO's sample budget
+    assert train_params(profile, "ipo_offline", "cyclic")["tau"] == 0.01
+    assert train_params(profile, "ipo", "majority")["tau"] == 0.05
+
+
+def test_train_overrides_merge_over_the_profile():
+    profile = load_profile("qwen", train_overrides={"ipo": {"tau": 0.05},
+                                                    "ml": {"ppo_epochs": 3}})
+    assert train_params(profile, "ipo")["tau"] == 0.05
+    ml = train_params(profile, "ml")
+    assert ml["ppo_epochs"] == 3 and ml["gamma"] == 1.0          # rest of train.ml kept

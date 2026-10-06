@@ -1,7 +1,7 @@
 """Compare pulled eval distributions against the paper's qualitative predictions.
 
 Usage: python scripts/verdicts.py <results_dir>/eval [config/method ...]
-       (default cells: all eight)
+       (default cells: the paper's eight; name ipo / ipo_offline cells to judge them)
 
 Reads <results_dir>/<config>/<method>/distributions.json and prints a markdown
 table with, per cell, the empirical distribution and a PASS/FAIL verdict against
@@ -42,6 +42,11 @@ EXPECTED = {
     ("cyclic", "rlhf"): ("collapse", None),
     ("cyclic", "ml"): ("uniform", None),
 }
+PAPER_CELLS = list(EXPECTED)
+# Online IPO is a second Maximal Lottery method, judged on its last iterate; the
+# offline-IPO control is predicted to behave like RLHF (experiment 0086).
+EXPECTED.update({(c, "ipo"): EXPECTED[(c, "ml")] for c, _ in PAPER_CELLS})
+EXPECTED.update({(c, "ipo_offline"): EXPECTED[(c, "rlhf")] for c, _ in PAPER_CELLS})
 
 DESCRIPTION = {
     ("majority", "rlhf"): "collapses to R",
@@ -53,6 +58,8 @@ DESCRIPTION = {
     ("cyclic", "rlhf"): "collapses to one arbitrary colour",
     ("cyclic", "ml"): "~1/3 each",
 }
+DESCRIPTION.update({(c, "ipo"): DESCRIPTION[(c, "ml")] for c, _ in PAPER_CELLS})
+DESCRIPTION.update({(c, "ipo_offline"): DESCRIPTION[(c, "rlhf")] for c, _ in PAPER_CELLS})
 
 # Same voter profile, same alternatives, same prompt — one RNG stream apart
 # (pipeline/populations.py; paper §6.3.2 "coincides with the experiment in
@@ -98,14 +105,14 @@ def fmt_dist(dist: dict) -> str:
 
 
 def main(root: Path, only: list[str] | None = None) -> int:
-    cells = list(EXPECTED)
+    cells = list(PAPER_CELLS)
     if only:
         wanted = [tuple(sel.split("/", 1)) for sel in only]
         unknown = [w for w in wanted if w not in EXPECTED]
         if unknown:
             print(f"unknown cells: {unknown}; valid: {sorted(EXPECTED)}")
             return 2
-        cells = [c for c in cells if c in wanted]
+        cells = [c for c in EXPECTED if c in wanted]
 
     rows, missing, passes = [], [], 0
     judged: dict[tuple[str, str], dict] = {}
@@ -144,7 +151,7 @@ def main(root: Path, only: list[str] | None = None) -> int:
     print(f"\n{passes}/{len(rows)} cells match the paper's prediction.")
 
     rep_rows = [(m, judged.get((REPLICATES[0], m)), judged.get((REPLICATES[1], m)))
-                for m in ("rlhf", "ml")]
+                for m in ("rlhf", "ml", "ipo", "ipo_offline")]
     rep_rows = [(m, a, b) for m, a, b in rep_rows if a and b]
     if rep_rows:
         print(f"\nReplicate note: `{REPLICATES[0]}` and `{REPLICATES[1]}` are the same "
