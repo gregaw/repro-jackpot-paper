@@ -1,8 +1,8 @@
 # Jackpot reproduction: overview
 
 A walkthrough of how the [`jackpot-paper/`](../) reproduction works, with
-links to the code. Line links point at the code as of `main` @ `6bbdbac`, which is tagged
-`jackpot-paper/v1.1-online-ipo`. It has two parts, one per published version:
+links to the lines of code that implement each step. It has two parts, one per version of
+the code:
 
 - **v1.0: paper reproduction** (sections 1 to 3): the paper's two methods, SPO and RLHF.
 - **v1.1: Online IPO** (section 4): a second Maximal Lottery method added afterwards.
@@ -108,7 +108,7 @@ How to read it:
 
 ## v1.0: paper reproduction
 
-The paper's two methods, SPO and RLHF, as reproduced in tag `jackpot-paper/v1.0-replication`.
+The paper's two methods, SPO and RLHF, as reproduced in the first version of this repository.
 
 ### 1. How SPO works
 
@@ -174,26 +174,26 @@ replaced by forced colour words (step 4 below), and PPO carries a small KL pull 
 model (section 1.4).
 
 The loop is at
-[`train_spo.py` L83-99](../pipeline/stages/train_spo.py#L83-L99). Each step
+[`train_spo.py` L89-105](../pipeline/stages/train_spo.py#L89-L105). Each step
 does the following.
 
 1. **Sample from the current policy.** `generate_responses`
-   ([`train_common.py` L50-57](../pipeline/stages/train_common.py#L50-L57))
+   ([`train_common.py` L55-62](../pipeline/stages/train_common.py#L55-L62))
    samples 128 completions of the one fixed prompt, `…A: My favourite color is the color`.
    It uses plain sampling at temperature 1 with no top-k or top-p (`GEN_KWARGS`,
-   [`train_common.py` L47](../pipeline/stages/train_common.py#L47)), so it
+   [`train_common.py` L52](../pipeline/stages/train_common.py#L52)), so it
    sees the policy's true distribution. Responses are up to 8 new tokens long.
 
 2. **Parse each answer to a colour.** `parse_colour`
-   ([`evaluate.py` L16-22](../pipeline/stages/evaluate.py#L16-L22)) takes the
+   ([`evaluate.py` L15-21](../pipeline/stages/evaluate.py#L15-L21)) takes the
    first colour word in the text, or `None` if there isn't one.
 
 3. **Record the samples for the output mixture.** `mixture.observe(policy_parsed)` runs at
-   [`train_spo.py` L91](../pipeline/stages/train_spo.py#L91).
+   [`train_spo.py` L97](../pipeline/stages/train_spo.py#L97).
    Section 1.3 explains why.
 
 4. **Swap in forced colours for exploration.** At
-   [`train_spo.py` L92-96](../pipeline/stages/train_spo.py#L92-L96), 10% of
+   [`train_spo.py` L98-102](../pipeline/stages/train_spo.py#L98-L102), 10% of
    the batch (`uniform_colour_fraction` × 128, so 12 samples) is replaced by a single token
    `" red"`, `" blue"` or `" green"`, chosen uniformly (A.8: "10% of the batch is a uniform
    sample of the three colour words"). This keeps every colour appearing in the batch even
@@ -201,7 +201,7 @@ does the following.
    never get a reward and never come back.
 
 5. **Score each sample against the others.** `preference_rewards`
-   ([`train_spo.py` L22-42](../pipeline/stages/train_spo.py#L22-L42)) is the
+   ([`train_spo.py` L26-46](../pipeline/stages/train_spo.py#L26-L46)) is the
    formula from Algorithm 1:
 
    r_i = 1/(k−1) · Σ_{j≠i} P(a_i ≻ a_j)
@@ -213,11 +213,11 @@ does the following.
    format.
 
 6. **Take one PPO update.** `trainer.step(queries, responses, rewards)` runs at
-   [`train_spo.py` L98](../pipeline/stages/train_spo.py#L98). The trainer is
+   [`train_spo.py` L104](../pipeline/stages/train_spo.py#L104). The trainer is
    trl 0.10.1's `PPOTrainer`, built in `make_ppo_trainer`
-   ([`train_common.py` L29-44](../pipeline/stages/train_common.py#L29-L44)).
+   ([`train_common.py` L34-49](../pipeline/stages/train_common.py#L34-L49)).
    The policy is Gemma with a LoRA adapter and a value head (`build_ppo_policy`,
-   [`train_common.py` L11-26](../pipeline/stages/train_common.py#L11-L26)).
+   [`train_common.py` L16-31](../pipeline/stages/train_common.py#L16-L31)).
    There is no separate reference model. trl gets reference log-probs by switching the
    adapter off, which means the KL penalty anchors the policy to the base model.
 
@@ -248,7 +248,7 @@ pull toward the base model also moves the fixed point slightly. The equilibria a
   each.
 
 Training runs 30 epochs × (2048 / 128) = 16 steps per epoch, so 480 PPO steps in total
-([`train_spo.py` L79-81](../pipeline/stages/train_spo.py#L79-L81)).
+([`train_spo.py` L84-87](../pipeline/stages/train_spo.py#L84-L87)).
 
 #### 1.3 The output is a mixture, not the last model
 
@@ -260,26 +260,26 @@ equilibrium. [`scripts/spo_simplex_sim.py`](../scripts/spo_simplex_sim.py)
 demonstrates this on CPU.
 
 Keeping 480 LoRA adapters would be wasteful. `MixtureAccumulator`
-([`train_common.py` L124-159](../pipeline/stages/train_common.py#L124-L159))
+([`train_common.py` L129-164](../pipeline/stages/train_common.py#L129-L164))
 relies on the fact that, for one fixed prompt, the mixture's output distribution is just the
 average of the iterates' output distributions. So it adds up the colour counts from every
 step's sampled batch. It is fed the batch **before** the forced swap, because the forced
 tokens are not draws from the policy.
 
 The accumulated result is written to `mixture.json`
-([`train_spo.py` L100](../pipeline/stages/train_spo.py#L100)). The
+([`train_spo.py` L106](../pipeline/stages/train_spo.py#L106)). The
 evaluation stage attaches it to the ML cell's results
-([`evaluate.py` L118-127](../pipeline/stages/evaluate.py#L118-L127)), so the
+([`evaluate.py` L117-126](../pipeline/stages/evaluate.py#L117-L126)), so the
 verdicts judge the mixture. The sampled checkpoint is judged separately.
 
 Two related points:
 
 - **Which checkpoint is saved.** The separate checkpoint is chosen by `CheckpointGate`
-  ([`train_common.py` L168-215](../pipeline/stages/train_common.py#L168-L215)).
+  ([`train_common.py` L173-220](../pipeline/stages/train_common.py#L173-L220)).
   It keeps the last checkpoint taken while most of the model's outputs still parsed as
   colours, because PPO sometimes drifts into gibberish.
 - **Shared bookkeeping.** `TrainingLoop`
-  ([`train_common.py` L218-271](../pipeline/stages/train_common.py#L218-L271))
+  ([`train_common.py` L223-276](../pipeline/stages/train_common.py#L223-L276))
   handles metrics, sample logs and the per-epoch distribution rows for the figures, for both
   SPO and RLHF.
 
@@ -368,22 +368,22 @@ over the 2048 examples. The second term is trl's `center_rewards_coefficient`: i
 scores toward zero on average, so they don't drift. The paper sets c to 0.01.
 
 **How it's built.** `train_reward_model`
-([`train_rlhf.py` L18-57](../pipeline/stages/train_rlhf.py#L18-L57)):
+([`train_rlhf.py` L18-61](../pipeline/stages/train_rlhf.py#L18-L61)):
 
 - The backbone is Gemma with a one-number classifier head in place of the next-token head
   (`build_seq_cls`,
-  [`models.py` L82-98](../pipeline/models.py#L82-L98)). It gets its own LoRA
-  adapter ([`models.py` L101-110](../pipeline/models.py#L101-L110)).
+  [`models.py` L81-97](../pipeline/models.py#L81-L97)). It gets its own LoRA
+  adapter ([`models.py` L100-109](../pipeline/models.py#L100-L109)).
 - Each example becomes a pair of full texts, `prompt + " blue."` (chosen) and
   `prompt + " red."` (rejected)
-  ([L25-33](../pipeline/stages/train_rlhf.py#L25-L33)).
+  ([L25-35](../pipeline/stages/train_rlhf.py#L25-L35)).
 - trl's `RewardTrainer` trains it for 3 epochs, using A.8's settings and trl defaults
-  otherwise ([L40-55](../pipeline/stages/train_rlhf.py#L40-L55)).
+  otherwise ([L42-59](../pipeline/stages/train_rlhf.py#L42-L59)).
 
 **Recording what it learned.** After training, `canonical_rm_scores`
-([L77-86](../pipeline/stages/train_rlhf.py#L77-L86)) scores the three
+([L81-90](../pipeline/stages/train_rlhf.py#L81-L90)) scores the three
 canonical answers and writes them to `rm_scores.json`
-([L141-142](../pipeline/stages/train_rlhf.py#L141-L142)). This file is the
+([L145-146](../pipeline/stages/train_rlhf.py#L145-L146)). This file is the
 most useful diagnostic in the RLHF arm, because it shows the reward model's ranking directly.
 
 **Why the reward model behaves like a Borda count.** A Borda count ranks alternatives by
@@ -408,30 +408,30 @@ These measurements are in
 #### 2.2 Phase 2: PPO against the reward model
 
 The loop is at
-[`train_rlhf.py` L156-167](../pipeline/stages/train_rlhf.py#L156-L167). Each
+[`train_rlhf.py` L161-172](../pipeline/stages/train_rlhf.py#L161-L172). Each
 step does the following.
 
 1. **Sample.** It samples 16 completions of the fixed prompt, up to 8 tokens each, using the
    same `generate_responses` as SPO
-   ([`train_common.py` L50-57](../pipeline/stages/train_common.py#L50-L57)).
+   ([`train_common.py` L55-62](../pipeline/stages/train_common.py#L55-L62)).
    There are no forced-uniform colours: RLHF has no exploration mechanism beyond sampling at
    temperature 1.
 
 2. **Score.** `rm_scores`
-   ([`train_rlhf.py` L97-115](../pipeline/stages/train_rlhf.py#L97-L115))
+   ([`train_rlhf.py` L101-119](../pipeline/stages/train_rlhf.py#L101-L119))
    reduces each response to the colour in its first sentence (`first_sentence`,
-   [L71-74](../pipeline/stages/train_rlhf.py#L71-L74)). The reward is the
+   [L75-78](../pipeline/stages/train_rlhf.py#L75-L78)). The reward is the
    reward model's score for that colour's canonical answer, `prompt + " <colour>."`. A
    response naming no colour gets a fixed floor, `unparsed_reward`
-   ([L89-94](../pipeline/stages/train_rlhf.py#L89-L94)): the worst
+   ([L93-98](../pipeline/stages/train_rlhf.py#L93-L98)): the worst
    canonical score minus the gap between best and worst. That way, every real colour beats
    no answer by at least the preference gap. Section 2.3 explains why the raw sampled text
    isn't scored instead.
 
 3. **Update.** `trainer.step(queries, responses, rewards)`
-   ([L162](../pipeline/stages/train_rlhf.py#L162)) calls trl 0.10.1's PPO,
+   ([L167](../pipeline/stages/train_rlhf.py#L167)) calls trl 0.10.1's PPO,
    the same trainer as SPO (`make_ppo_trainer`,
-   [`train_common.py` L29-44](../pipeline/stages/train_common.py#L29-L44)).
+   [`train_common.py` L34-49](../pipeline/stages/train_common.py#L34-L49)).
    Inside `step`, trl does four things:
    - It builds a reward for every response token. Each token gets
      −β · (log π(token) − log π_ref(token)), a penalty for moving away from the base model.
@@ -446,10 +446,10 @@ step does the following.
      over `ppo_epochs` passes of the batch.
 
 4. **Log.** `after_step`
-   ([L165-167](../pipeline/stages/train_rlhf.py#L165-L167)) records the
+   ([L170-172](../pipeline/stages/train_rlhf.py#L170-L172)) records the
    parse rate, colour distribution and KL, plus a per-colour mean reward
    (`reward_by_colour`,
-   [`train_common.py` L93-102](../pipeline/stages/train_common.py#L93-L102)).
+   [`train_common.py` L98-107](../pipeline/stages/train_common.py#L98-L107)).
    The per-colour reward is what exposed the bug described in section 2.3.
 
 **What PPO converges to.** With a KL penalty of weight β, the best policy has a closed form:
@@ -461,10 +461,10 @@ it is the base model's distribution, tilted toward the reward model's favourite.
 it can only amplify the reward model's order. It can't produce a deliberate lottery.
 
 Training runs 2 epochs × (2048 / 16) = 128 steps per epoch, so 256 PPO steps in total
-([L153-155](../pipeline/stages/train_rlhf.py#L153-L155)).
+([L157-160](../pipeline/stages/train_rlhf.py#L157-L160)).
 
 **Output.** The output is a single policy: the checkpoint kept by `CheckpointGate`
-([`train_common.py` L168-215](../pipeline/stages/train_common.py#L168-L215)),
+([`train_common.py` L173-220](../pipeline/stages/train_common.py#L173-L220)),
 the last one saved while its outputs were still mostly parseable. There is no
 `mixture.json`. The evaluation stage samples 1000 answers from that checkpoint, and the
 verdicts judge RLHF cells on those samples.
@@ -474,7 +474,7 @@ verdicts judge RLHF cells on those samples.
 The overrides are in
 [`configs/experiments.yaml` L26-37](../configs/experiments.yaml#L26-L37).
 They are layered on A.8's values by `train_params`
-([`config.py` L29-90](../pipeline/config.py#L29-L90)): first A.8, then the
+([`config.py` L29-92](../pipeline/config.py#L29-L92)): first A.8, then the
 `rlhf` overrides, then the per-cell overrides.
 
 | Setting | A.8 value | Ours | Reason |
@@ -493,15 +493,15 @@ red +0.63, although the reward model ranked blue first by 0.50. So PPO optimised
 continuation, and the two-option cell went red under every anchor. Reducing each response
 to its colour leaves PPO one lever, the colour token. That is the same information SPO's
 reward uses, which also keeps the comparison between the two methods fair. The docstring at
-[`train_rlhf.py` L97-107](../pipeline/stages/train_rlhf.py#L97-L107) records
-this, and the reproduction report lists it as issue 3.
+[`train_rlhf.py` L101-111](../pipeline/stages/train_rlhf.py#L101-L111) records
+this, and Appendix G of the reproduction report lists it as problem 3.
 
 ### 3. Understanding PPO
 
 Both arms train the policy with the same routine: one call per step to trl 0.10.1's
 `PPOTrainer.step(queries, responses, scores)`
-([`train_spo.py` L98](../pipeline/stages/train_spo.py#L98),
-[`train_rlhf.py` L162](../pipeline/stages/train_rlhf.py#L162)). Our code
+([`train_spo.py` L104](../pipeline/stages/train_spo.py#L104),
+[`train_rlhf.py` L167](../pipeline/stages/train_rlhf.py#L167)). Our code
 decides *what the score is*. Everything after that happens inside trl. This section opens
 that box. trl links point at the library's source at the `v0.10.1` tag, the version the
 paper and this repo use.
@@ -522,7 +522,7 @@ reinforcement-learning terms:
 | Action a_t | The next token. There are about 256k choices, Gemma's vocabulary. |
 | Episode | One response: up to 8 tokens, or fewer if the model emits end-of-sequence. |
 | Reward | Our score (win rate for SPO, reward-model score for RLHF), given once at the end of the episode, plus a small KL penalty on every token (section 3.3). |
-| Value V(s_t) | The expected total future reward from state s_t. A **value head** estimates it: a single linear layer on Gemma's last hidden state, with dropout 0.1 ([`modeling_value_head.py` L22-59](https://github.com/huggingface/trl/blob/v0.10.1/trl/models/modeling_value_head.py#L22-L59)). `AutoModelForCausalLMWithValueHead` adds it to the policy ([`train_common.py` L11-26](../pipeline/stages/train_common.py#L11-L26)). |
+| Value V(s_t) | The expected total future reward from state s_t. A **value head** estimates it: a single linear layer on Gemma's last hidden state, with dropout 0.1 ([`modeling_value_head.py` L22-59](https://github.com/huggingface/trl/blob/v0.10.1/trl/models/modeling_value_head.py#L22-L59)). `AutoModelForCausalLMWithValueHead` adds it to the policy ([`train_common.py` L16-31](../pipeline/stages/train_common.py#L16-L31)). |
 | Reference π_ref | The base model: the same network with the adapter switched off. |
 
 In our task only one action really matters: the first token, the colour. The later tokens
@@ -553,7 +553,7 @@ end repeat
 `PPOTrainer.step`
 ([`ppo_trainer.py` L648-890](https://github.com/huggingface/trl/blob/v0.10.1/trl/trainer/ppo_trainer.py#L648-L890))
 receives a batch of responses already sampled by our code
-([`train_common.py` L50-57](../pipeline/stages/train_common.py#L50-L57)),
+([`train_common.py` L55-62](../pipeline/stages/train_common.py#L55-L62)),
 with one score each. It then does the following:
 
 1. **Record the old policy.** A forward pass without gradients over prompt plus response
@@ -590,7 +590,7 @@ builds a reward for every response token t:
   It is positive when the policy has made a token more likely than the base model did.
   So every token pays a small fee for drifting away from the base model.
 - **β** is `init_kl_coef`. We set `adap_kl_ctrl=False`
-  ([`train_common.py` L39](../pipeline/stages/train_common.py#L39)), so β
+  ([`train_common.py` L44](../pipeline/stages/train_common.py#L44)), so β
   stays fixed. trl's default would adapt it toward a target KL of 6 nats.
 - **The score** lands on the **last** response token only. That is the root of the γ story
   in the next section.
@@ -634,18 +634,18 @@ estimates enter as a baseline. At **γ = 0 the weight is 0**. The
 colour token's advantage becomes r_0 − V(s_0): the KL fee minus a value estimate, with no
 trace of the preference. That is why every SPO run at A.8's γ = 0 wandered. It is pinned on
 trl's own code by
-[`test_gamma_zero_severs_score_from_colour_token`](../tests/test_gamma_credit.py#L56-L61)
+[`test_gamma_zero_severs_score_from_colour_token`](../tests/test_gamma_credit.py#L53-L58)
 and
-[`test_gamma_one_delivers_score_to_colour_token`](../tests/test_gamma_credit.py#L63-L66).
+[`test_gamma_one_delivers_score_to_colour_token`](../tests/test_gamma_credit.py#L60-L63).
 
 The same arithmetic shows why a **one-token** response would make γ irrelevant. The colour
-is then the last token, so the score lands on it directly. That is the alternative reading
-of A.8 in the peer review's major issue 4.
+is then the last token, so the score lands on it directly. That is the other way to read
+A.8: the paper may have generated a single token, and then γ = 0 does no harm.
 
 At γ = 1 the value head also matters. Every δ_t includes V(s_{t+1}), so an untrained head
 (A.8's `vf_coef` = 0) adds noise that drifts from step to step. That is why we train it
 with `vf_coef` 0.01
-([`test_trained_value_head_removes_bootstrap_noise_from_advantages`](../tests/test_gamma_credit.py#L78)).
+([`test_trained_value_head_removes_bootstrap_noise_from_advantages`](../tests/test_gamma_credit.py#L75)).
 
 #### 3.5 Whitening: only relative scores matter
 
@@ -732,9 +732,9 @@ batch's luck.
 Defaults from
 [`ppo_config.py` L69-125](https://github.com/huggingface/trl/blob/v0.10.1/trl/trainer/ppo_config.py#L69-L125).
 Ours are set in `make_ppo_trainer`
-([`train_common.py` L29-44](../pipeline/stages/train_common.py#L29-L44))
+([`train_common.py` L34-49](../pipeline/stages/train_common.py#L34-L49))
 from `train_params`
-([`config.py` L29-90](../pipeline/config.py#L29-L90)).
+([`config.py` L29-92](../pipeline/config.py#L29-L92)).
 
 | Setting | What it controls | trl default | SPO | RLHF |
 | --- | --- | --- | --- | --- |
@@ -752,14 +752,14 @@ from `train_params`
 
 ## v1.1: Online IPO
 
-A second Maximal Lottery method added after the paper reproduction, from experiment 0086
-(tag `jackpot-paper/v1.1-online-ipo`).
+A second Maximal Lottery method added after the paper reproduction, written up in
+[the Online IPO / CoVal paper](experiments_ipo_coval.md).
 
 ### 4. How Online IPO works
 
 Online IPO (Calandriello et al. 2024, arXiv:2403.08635) is a second way to train toward the
 Maximal Lottery. It is not in the Jackpot paper. It was suggested in feedback on the
-reproduction and tried in experiment 0086, and it is now a method of the pipeline alongside
+reproduction, and it is now a method of the pipeline alongside
 `rlhf` and `ml` (SPO). Like SPO it needs no reward model and reads the pairwise preferences
 directly. Unlike SPO it needs no PPO and no mixture of iterates:
 
@@ -785,14 +785,14 @@ log-ratio 0.3 / τ above its rival; a tie should end up with no gap at all. τ s
 from the base model the policy may move. A smaller τ means larger targets and a sharper
 policy.
 
-- **Targets.** `pair_targets` ([`train_ipo.py` L46-56`](../pipeline/stages/train_ipo.py#L46-L56)) fills a k × k matrix of
+- **Targets.** `pair_targets` ([`train_ipo.py` L47-57`](../pipeline/stages/train_ipo.py#L47-L57)) fills a k × k matrix of
   (P(cᵢ > cⱼ) − ½) / τ for the batch, using the same preference function as SPO
-  (section 1.1). `pair_preference` ([`train_ipo.py` L34-43`](../pipeline/stages/train_ipo.py#L34-L43)) adds SPO's rule for answers that name no
+  (section 1.1). `pair_preference` ([`train_ipo.py` L35-44`](../pipeline/stages/train_ipo.py#L35-L44)) adds SPO's rule for answers that name no
   colour: they lose to any named colour and tie with each other.
-- **Loss.** `online_ipo_loss` ([`train_ipo.py` L59-72`](../pipeline/stages/train_ipo.py#L59-L72)) is the mean squared error between dᵢ − dⱼ and
+- **Loss.** `online_ipo_loss` ([`train_ipo.py` L60-73`](../pipeline/stages/train_ipo.py#L60-L73)) is the mean squared error between dᵢ − dⱼ and
   the target over every pair i < j of the batch, so a batch of 128 gives 8,128 pairs.
 - **Reference.** As in SPO and RLHF, π_ref is the same model with the LoRA adapter switched
-  off ([`train_ipo.py` L103-111`](../pipeline/stages/train_ipo.py#L103-L111)).
+  off ([`train_ipo.py` L104-112`](../pipeline/stages/train_ipo.py#L104-L112)).
 
 The minimiser of this loss is the Nash equilibrium of the τ-regularised preference game
 (Proposition 4.1 of the IPO paper). As τ shrinks, that equilibrium approaches the Maximal
@@ -820,14 +820,14 @@ Return: π_T                                            ▷ the last iterate
 Compared with Algorithm 1, the pairs replace the per-answer reward and PPO, and the method
 returns the last policy instead of a mixture.
 
-The training loop is in `run` ([`train_ipo.py` L287-323`](../pipeline/stages/train_ipo.py#L287-L323)). Each step:
+The training loop is in `run` ([`train_ipo.py` L288-324`](../pipeline/stages/train_ipo.py#L288-L324)). Each step:
 
-1. Samples 128 answers from the **current** policy ([`train_ipo.py` L295`](../pipeline/stages/train_ipo.py#L295)). This is what "online"
+1. Samples 128 answers from the **current** policy ([`train_ipo.py` L296`](../pipeline/stages/train_ipo.py#L296)). This is what "online"
    means: the pairs are the policy's own answers, so the targets always describe the
    policy's current mistakes. Unlike SPO there is no forced-colour substitution, since forced
    answers would make the pairs partly off-policy.
-2. Parses each answer to a colour and builds the target matrix ([`train_ipo.py` L296-300`](../pipeline/stages/train_ipo.py#L296-L300)).
-3. Takes one optimiser step on the loss with `ipo_step` ([`train_ipo.py` L114-151`](../pipeline/stages/train_ipo.py#L114-L151)).
+2. Parses each answer to a colour and builds the target matrix ([`train_ipo.py` L297-301`](../pipeline/stages/train_ipo.py#L297-L301)).
+3. Takes one optimiser step on the loss with `ipo_step` ([`train_ipo.py` L115-152`](../pipeline/stages/train_ipo.py#L115-L152)).
 
 `ipo_step` has one wrinkle. The loss couples every answer in the batch to every other, so it
 cannot be split into independent mini-batches. When the batch does not fit in memory at once,
@@ -844,9 +844,9 @@ There is one optimiser step per sampled batch, so 480 steps make 480 updates. SP
 SPO returns a mixture of iterates because its last iterate orbits a preference cycle
 (section 1.3). Online IPO's loss has a fixed point at the regularised equilibrium, so in
 principle the last policy is the answer. The mixture is still accumulated
-([`train_ipo.py` L286`](../pipeline/stages/train_ipo.py#L286), written at [`train_ipo.py` L324`](../pipeline/stages/train_ipo.py#L324)) but only for comparison with SPO. The verdicts judge the
+([`train_ipo.py` L287`](../pipeline/stages/train_ipo.py#L287), written at [`train_ipo.py` L325`](../pipeline/stages/train_ipo.py#L325)) but only for comparison with SPO. The verdicts judge the
 final checkpoint
-([`verdicts.py` L45-49](../scripts/verdicts.py#L45-L49) gives `ipo` the
+([`verdicts.py` L45-51](../scripts/verdicts.py#L45-L51) gives `ipo` the
 `ml` predictions and `ipo_offline` the `rlhf` ones).
 
 On a language model the last iterate needed two changes to settle on the cyclic cell:
@@ -854,15 +854,15 @@ On a language model the last iterate needed two changes to settle on the cyclic 
 - **No Adam momentum.** With Adam's default β₁ = 0.9 the policy orbits the cycle just as SPO
   does; a smaller learning rate only slows the orbit. With β₁ = 0 the per-epoch shares sit
   near uniform. The optimiser is built with `adam_beta1` from the settings
-  ([`train_ipo.py` L270-273`](../pipeline/stages/train_ipo.py#L270-L273)), and
-  [`test_train_ipo.py` L179](../tests/test_train_ipo.py#L179) shows both
+  ([`train_ipo.py` L271-274`](../pipeline/stages/train_ipo.py#L271-L274)), and
+  [`test_train_ipo.py` L180](../tests/test_train_ipo.py#L180) shows both
   behaviours on a toy policy.
 - **Learning-rate decay at the end.** Even with β₁ = 0, each update is driven by only 128
   sampled answers, so the last single step jitters around the equilibrium. `lr_multiplier`
-  ([`train_ipo.py` L154-163`](../pipeline/stages/train_ipo.py#L154-L163)) decays the learning rate linearly to zero over the last quarter of
+  ([`train_ipo.py` L155-164`](../pipeline/stages/train_ipo.py#L155-L164)) decays the learning rate linearly to zero over the last quarter of
   training, which removes that jitter.
 
-A further option, the IPO-MD sampler (`generate_geometric_mixture`, [`train_ipo.py` L197-224`](../pipeline/stages/train_ipo.py#L197-L224)), samples
+A further option, the IPO-MD sampler (`generate_geometric_mixture`, [`train_ipo.py` L198-225`](../pipeline/stages/train_ipo.py#L198-L225)), samples
 from a geometric mix of the policy and the base model so a collapsed policy still sees the
 colour that beats it. It did not help at `mix_beta` 0.125 and is off by default.
 
@@ -870,7 +870,7 @@ colour that beats it. It did not help at `mix_beta` 0.125 and is off by default.
 
 `ipo_offline` uses the same loss on the fixed `data_gen` pairs instead of the policy's own
 answers: the chosen colour against the rejected one, with target 1 / (2τ)
-(`offline_ipo_loss`, [`train_ipo.py` L75-77`](../pipeline/stages/train_ipo.py#L75-L77); the batch is built at [`train_ipo.py` L306-315`](../pipeline/stages/train_ipo.py#L306-L315)). This is standard IPO
+(`offline_ipo_loss`, [`train_ipo.py` L76-78`](../pipeline/stages/train_ipo.py#L76-L78); the batch is built at [`train_ipo.py` L307-316`](../pipeline/stages/train_ipo.py#L307-L316)). This is standard IPO
 on a dataset, as TRL implements it.
 
 ```
@@ -888,17 +888,17 @@ Return: π_T
 Offline IPO on uniformly sampled pairs maximises each colour's average win rate against a
 random colour. That is the Borda count, so it should pick red on `majority` and fail the IIA
 test, exactly like RLHF
-([`test_train_ipo.py` L173](../tests/test_train_ipo.py#L173)). Comparing the
+([`test_train_ipo.py` L174](../tests/test_train_ipo.py#L174)). Comparing the
 two arms on the same preference data isolates "online" as the ingredient that finds the
 Condorcet winner.
 
 #### 4.5 Settings and results
 
 A.8 has no values for IPO. The settings are in `train_params`
-([`config.py` L61-77](../pipeline/config.py#L61-L77)). Epochs, batch size
+([`config.py` L61-78](../pipeline/config.py#L61-L78)). Epochs, batch size
 and learning rate follow the SPO arm, so both Maximal Lottery arms see the same number of
 samples. `ipo_offline` inherits the online arm's settings unless a profile overrides them
-([`config.py` L82-88](../pipeline/config.py#L82-L88)).
+([`config.py` L84-90](../pipeline/config.py#L84-L90)).
 
 | Setting | Value | Why |
 | --- | --- | --- |
@@ -915,5 +915,5 @@ With these settings, on Qwen2.5-0.5B with one seed, Online IPO passes all four c
 last iterate: blue 0.81 on `majority`, blue 0.93 and 0.90 on the IIA pair, and
 0.31 / 0.39 / 0.30 on `cyclic`. The offline control at τ 0.1 picks red (0.59) on `majority`,
 the Borda winner, as predicted. The full results, the τ screen and the runs that orbited are
-in experiment 0086, written up in [the Online IPO / CoVal paper](experiments_ipo_coval.md). Gemma has not been run with
+in [the Online IPO / CoVal paper](experiments_ipo_coval.md). Gemma has not been run with
 Online IPO, and `majority` clears its bar by only 0.01, so a second seed could fail it.

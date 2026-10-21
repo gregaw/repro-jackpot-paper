@@ -21,8 +21,9 @@
   after seeing results, where the paper uses one setting per arm (Appendix A). And we
   generate 8 tokens where the paper may have generated one, which may explain several of
   our deviations from its hyperparameters (section 4).
-- **Next:** a run of the paper's hyperparameters verbatim with one-token generation, then a
-  frozen confirmation run on fresh data. Both need a budget decision (section 5).
+- **Open questions:** whether the paper's hyperparameters work verbatim with one-token
+  generation, and whether the result holds in a frozen confirmation run on fresh data
+  (section 5).
 
 ## 1. Setup
 
@@ -139,14 +140,14 @@ back towards the base model by the KL anchor. That is narrower than RLHF on free
 
 The full table, with reasons and the smaller deviations, is in Appendix E.
 
-## 5. Limits and next steps
+## 5. Limits and future work
 
 **Limits of the paper's own design**, reported rather than fixed, since fixing them would
 mean running a different experiment: no base-model control; RLHF `majority` → red points
 the same way as the base model's leaning; no generation length, entropy value, handling of
 unreadable answers or evaluation protocol given; no seed counts or error bars.
 
-**Next steps.** None started yet. Detail and reasons in Appendix H.
+**Future work.** None of this has been run. Detail and reasons in Appendix H.
 
 | # | What | Cost |
 | --- | --- | --- |
@@ -256,7 +257,7 @@ gave 0.20 / 0.01 / 0.77, still under the bar.
 
 Because Qwen leans blue on the three-option prompt, its RLHF cells that went red moved
 against the base model's leaning. Base-model evaluations to show this per cell are
-next-step 3.
+Appendix H, item 3.
 
 ## Appendix E. All deviations from the paper
 
@@ -272,7 +273,7 @@ was run.
 | SPO mini-batch / inner PPO epochs | 32 / trl default 4 | 8, accumulated over 4 / 2 | four accumulated mini-batches of 8 give the same update as one of 32 in a quarter of the memory; 32 does not fit a 24 GB L4, and the setting was kept on the L40S so both GPUs run one recipe. Inner epochs were halved for cost; that one is a real change. |
 | RLHF KL coefficient | 0.0 | 0.2 (0.1 two-option, 0.05 cyclic) | with no anchor PPO reaches the answer by step 6 and then degenerates |
 | RLHF epochs / learning rate / mini-batch | 4 / 5e-4 / 16 | 2 / 1e-4 / 8, accumulated over 2 | at A.8's values PPO degenerates after reaching the answer; 256 steps at these values end before it does. That is 256 PPO steps against the paper's 512 (SPO runs 480 in both). The mini-batch is 16 in effect. |
-| RLHF reward on a sampled response | not described | reward-model score of the canonical answer for the colour the response names; a response naming no colour gets the worst canonical score minus the spread | the reward model is trained on `prompt + " <colour>."` only. Scored on PPO's whole 8-token answer (" blue. The sky is"), the reward was driven by the words after the colour. The floor scales with the spread, so where scores are close it is weak: on Gemma `cyclic` it was red +0.016, blue −0.006, green −0.011, unreadable −0.050. A fixed minimum gap is next-step 1. |
+| RLHF reward on a sampled response | not described | reward-model score of the canonical answer for the colour the response names; a response naming no colour gets the worst canonical score minus the spread | the reward model is trained on `prompt + " <colour>."` only. Scored on PPO's whole 8-token answer (" blue. The sky is"), the reward was driven by the words after the colour. The floor scales with the spread, so where scores are close it is weak: on Gemma `cyclic` it was red +0.016, blue −0.006, green −0.011, unreadable −0.050. A fixed minimum gap is Appendix H, item 1. |
 | Reward-model learning rate | trl default (5e-5) | 1e-4, hard-coded | not a deliberate choice; to be set to 5e-5 in the next runs |
 | Checkpoint selection | final policy | last checkpoint saved while the recent unreadable fraction was at most 0.3 (checked every 8 steps) | PPO cells drift into degenerate generation at unpredictable points. Selection only; training is unchanged. |
 | Model | Gemma-2-2B | Gemma-2-2B, plus Qwen2.5-0.5B for screening | Gemma 2 needs `eager` attention (sdpa skips its logit softcapping and samples NaNs in bf16) |
@@ -310,16 +311,16 @@ one purpose the split is approximate.
 
 | # | Problem | How it showed | How it was found and fixed | Spend attributable |
 | --- | --- | --- | --- | --- |
-| 1 | **The SPO discount factor was 0 under 8-token generation.** A.8's line "Gamma patience: 0.0" was read as PPO's γ. Under trl 0.10.1 the score sits on the last response token and reaches the colour token as γᵏ, so with 8-token generation at γ = 0 no SPO cell ever received a preference gradient. A.8 may have assumed one-token generation, under which γ = 0 is harmless; that is not yet tested (next-step 4). | Every Maximal Lottery cell across three campaigns wandered near the base model's colour prior or collapsed into unreadable output, whatever the anchor or entropy setting. Training curves gave no hint. | A unit test on trl's own reward and advantage code, plus a CPU simulation in the simplex that reproduced the observed wander. Restoring γ = 1 required training the value head (`vf_coef` 0.01) or the policy orbits. | about \$35: the SPO halves of the first L4 and L40S campaigns, the entropy and exploration experiments that tried to work around it, the first Qwen grid, and the diagnosis. Qwen did not help find this problem, but once it was fixed it made each check cheap: the canaries that confirmed the fix cost about \$1 to \$2 each on Qwen. |
+| 1 | **The SPO discount factor was 0 under 8-token generation.** A.8's line "Gamma patience: 0.0" was read as PPO's γ. Under trl 0.10.1 the score sits on the last response token and reaches the colour token as γᵏ, so with 8-token generation at γ = 0 no SPO cell ever received a preference gradient. A.8 may have assumed one-token generation, under which γ = 0 is harmless; that is not yet tested (Appendix H, item 4). | Every Maximal Lottery cell across three campaigns wandered near the base model's colour prior or collapsed into unreadable output, whatever the anchor or entropy setting. Training curves gave no hint. | A unit test on trl's own reward and advantage code, plus a CPU simulation in the simplex that reproduced the observed wander. Restoring γ = 1 required training the value head (`vf_coef` 0.01) or the policy orbits. | about \$35: the SPO halves of the first L4 and L40S campaigns, the entropy and exploration experiments that tried to work around it, the first Qwen grid, and the diagnosis. Qwen did not help find this problem, but once it was fixed it made each check cheap: the canaries that confirmed the fix cost about \$1 to \$2 each on Qwen. |
 | 2 | **Generation degenerated after convergence.** With A.8's KL coefficient of 0 PPO reaches the answer by step 6 and keeps pushing the saturated reward until the model emits nothing readable. | The first full run produced eight cells with a parse rate under 25%; later cells bounced in and out of degenerate output on their own schedules. | A KL anchor, a lower learning rate and fewer epochs for RLHF; a keep-last-healthy checkpoint gate for both arms. The gate is selection only and is recorded in `metrics.jsonl`. | about \$12: the early RLHF re-runs and the retrains of the L40S campaign after the gate was added. |
 | 3 | **The RLHF reward was computed on text the reward model never saw.** The reward model was trained on canonical answers and scored on PPO's full 8-token generations. | The two-option RLHF cell went red under every anchor on both models, against a reward model that ranked blue first. Per-step reward-by-colour logging showed blue paid −1.69 and red +0.63 at step 1 while the canonical margin was +0.50 for blue; PPO was optimising the continuation. | Score the canonical answer for the colour a response names, with a fixed floor for responses naming none. Two weaker fixes (first sentence only; canonical without the floor) were tried first. | about \$9: the KL sweeps on the two-option cell, the diagnostic runs, three fix attempts, and re-running the RLHF arm on both models. |
 | 4 | **Hardware and environment.** Gemma's 256k-vocabulary logits at A.8's mini-batch of 32 do not fit a 24 GB L4; the L40S is not schedulable without a payment method; Gemma 2 needs eager attention; the first dependency set did not resolve. | Out-of-memory and NaN failures in the first canaries; a run that silently stalled because `modal run` was used without `--detach`. | Smaller mini-batches with gradient accumulation on the L4, the L40S once a card was attached, pinned dependencies, `--detach` everywhere. | about \$8 of canaries. |
 | 5 | **The SPO KL anchor was too tight for the majority cell on Gemma.** | Blue plateaued at 0.79 to 0.80 on two seeds while `iia_3alt`, the same population on another draw of the dataset, reached 0.94. | The anchored equilibrium p ∝ base · exp(r/β) on the cell's empirical preference table predicted the plateau: with a KL anchor, training settles where each colour's probability is the base model's probability scaled up by its reward, and the stronger the anchor the less it is scaled. Computed on this cell's preference data, that point was blue 0.80; halving the anchor on the same data gave 0.96. | about \$8: two seed draws and the rerun. |
 | 6 | **Evaluation methodology.** Distributions were first reported conditional on parsing, over as little as 44% of samples; Maximal Lottery cells were judged on a single checkpoint rather than the mixture of iterates; `majority` and `iia_3alt` were counted as two experiments. | An L40S run was reported as 5 of 8 matches and re-judged as 1 of 8 once the rules were fixed. | Unconditional distributions, mixture-of-iterates accumulation during training, replicate reporting, and a verdict script fixed before further runs. | no compute; it changed how earlier spend was read. |
 
-## Appendix H. Next steps in detail
+## Appendix H. Future work in detail
 
-A review of this reproduction asked for these. None has been done yet.
+Each item says what it would change and why it matters. None has been run.
 
 **1. Code fixes** (no cost). A word-boundary colour parser; a floor for unreadable answers
 with a fixed minimum gap, `lo − max(hi − lo, 1.0)`; per-step colour counts in

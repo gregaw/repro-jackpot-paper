@@ -12,8 +12,19 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from spo_simplex_sim import (UNPARSED, algorithm1_rewards, argmax_crossover,
-                             margin_preference, run_spo)
+from spo_simplex_sim import (
+    QWEN_BASE_PRIOR,
+    UNPARSED,
+    algorithm1_rewards,
+    argmax_crossover,
+    empirical_table_preference,
+    kl_anneal,
+    kl_fixed_point,
+    kl_penalties,
+    margin_preference,
+    parse_prior,
+    run_spo,
+)
 
 
 def test_margin_preference_matches_the_populations():
@@ -44,8 +55,8 @@ def test_algorithm1_reward_is_the_mean_pairwise_score():
 
 def test_condorcet_populations_converge_for_both_output_policies():
     """Where the maximal lottery is a pure strategy, the last iterate and the
-    uniform mixture agree — which is why three of the four cells can reproduce
-    even though the pipeline evaluates a single checkpoint."""
+    uniform mixture agree, so on these three cells judging a single checkpoint
+    and judging the mixture give the same verdict."""
     for name in ("majority", "iia_2alt", "iia_3alt"):
         r = run_spo(name, iterations=480, seed=7)
         assert r["last_iterate"]["blue"] > 0.9, name
@@ -80,8 +91,8 @@ def test_unparsed_mass_delays_the_condorcet_crossover():
     assert argmax_crossover(clean["trace_last"], "blue") < 20
     assert argmax_crossover(dirty["trace_last"], "blue") > 200
 
-    # at the ~80% unparsed rate observed in results/paper-l40s/train_ml, 480
-    # iterations leave the policy short of the paper's near-1.0 blue
+    # at an 80% unparsed rate, as seen in an early SPO run on an L40S,
+    # 480 iterations leave the policy short of the paper's near-1.0 blue
     assert dirty["last_iterate"]["blue"] < 0.6
 
 
@@ -100,10 +111,6 @@ def test_argmax_crossover_semantics():
 
 
 # --- base prior, KL penalty, credit modes, fixed point ---
-
-from spo_simplex_sim import (QWEN_BASE_PRIOR, empirical_table_preference,
-                             kl_anneal, kl_fixed_point, kl_penalties,
-                             parse_prior)
 
 
 def test_kl_anneal_schedule():

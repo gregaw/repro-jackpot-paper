@@ -1,6 +1,6 @@
 """Stage wiring: run the pipeline (or a subset) against a Storage root.
 
-Pure local execution — no Modal imports. modal_app.py calls these same
+Pure local execution, no Modal imports. modal_app.py calls these same
 functions inside containers; the e2e test calls them directly on CPU.
 """
 

@@ -1,10 +1,9 @@
 """Model/tokenizer construction, including the credential-free tiny smoke model.
 
 The smoke profile uses a tiny randomly-initialised Gemma2 architecture with a
-byte-level BPE tokenizer built in-process, so the local e2e test needs no
-credentials and no network at all. (It previously fetched the gpt2 tokenizer,
-whose one-time download was the gate's only network dependency — and a sandbox
-egress allowlist without huggingface.co blocked the whole gate.)
+word-level tokenizer built in-process, so the local e2e test needs no
+credentials and no network at all: a downloaded tokenizer would make the one
+check that must pass before any GPU spend depend on reaching huggingface.co.
 """
 
 from pathlib import Path
@@ -14,7 +13,7 @@ TINY_SENTINEL = "tiny-random"
 
 def _tiny_tokenizer():
     """Offline WordLevel vocabulary: the colour words plus filler, built in
-    milliseconds. The tiny random model needs *a* vocab, not gpt2's — and a
+    milliseconds. The tiny random model needs *a* vocab, not a real one, and a
     vocab this small means even random logits emit colour words, so the eval
     stage reliably has something to parse. Out-of-vocabulary prompt words map
     to <unk>, which is fine for a wiring test."""

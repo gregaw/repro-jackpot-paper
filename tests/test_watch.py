@@ -1,4 +1,4 @@
-"""Unit tests for scripts/watch.py parsing — the pure functions whose shell
+"""Unit tests for scripts/watch.py parsing: the pure functions whose shell
 predecessors misfired on ANSI codes and truncated app names."""
 
 import json

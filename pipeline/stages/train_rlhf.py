@@ -8,8 +8,8 @@ from pipeline.config import prompt_for, train_params
 from pipeline.costs import stage_timer
 from pipeline.models import build_seq_cls, lora_config
 from pipeline.populations import CONFIGS
-from pipeline.stages.evaluate import parse_colour
 from pipeline.stages import train_common as tc
+from pipeline.stages.evaluate import parse_colour
 from pipeline.storage import Storage
 
 STAGE = "train_rlhf"
@@ -23,8 +23,10 @@ def train_reward_model(rows: list[dict], model_name: str, dtype: str, lora: dict
     from trl import RewardConfig, RewardTrainer
 
     def fmt(row):
-        chosen = tokenizer(row["prompt"] + " " + row["chosen"] + ".", truncation=True, max_length=256)
-        rejected = tokenizer(row["prompt"] + " " + row["rejected"] + ".", truncation=True, max_length=256)
+        chosen = tokenizer(row["prompt"] + " " + row["chosen"] + ".",
+                           truncation=True, max_length=256)
+        rejected = tokenizer(row["prompt"] + " " + row["rejected"] + ".",
+                             truncation=True, max_length=256)
         return {
             "input_ids_chosen": chosen["input_ids"],
             "attention_mask_chosen": chosen["attention_mask"],
@@ -41,6 +43,8 @@ def train_reward_model(rows: list[dict], model_name: str, dtype: str, lora: dict
         output_dir=str(workdir / "rm_trainer"),
         num_train_epochs=epochs,
         per_device_train_batch_size=8,
+        # A.8 says trl's defaults, which would be 5e-5. 1e-4 is what produced
+        # the reported runs; it was not a deliberate choice, and the report says so.
         learning_rate=1e-4,
         center_rewards_coefficient=center_coef,
         logging_steps=50,
@@ -150,9 +154,10 @@ def run(storage: Storage, profile: dict, config_name: str, force: bool = False) 
         query = tokenizer(prompt, return_tensors="pt")["input_ids"][0].to(device)
         max_new = profile["eval"]["max_new_tokens"]
 
-        loop = tc.TrainingLoop(out, policy, tokenizer, pop.alternatives, tag=f"[rlhf/{config_name}]",
-                               epochs=tp["epochs"],
-                               steps_per_epoch=max(1, profile["data"]["n_datapoints"] // tp["batch_size"]))
+        steps_per_epoch = max(1, profile["data"]["n_datapoints"] // tp["batch_size"])
+        loop = tc.TrainingLoop(out, policy, tokenizer, pop.alternatives,
+                               tag=f"[rlhf/{config_name}]", epochs=tp["epochs"],
+                               steps_per_epoch=steps_per_epoch)
         for epoch, it in loop.epochs_and_steps():
             queries, responses = tc.generate_responses(
                 trainer, query, tp["batch_size"], max_new, tokenizer.pad_token_id

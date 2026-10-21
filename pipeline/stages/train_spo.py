@@ -1,5 +1,9 @@
 """Stage: Maximal Lottery policy via SPO (paper Algorithm 1).
 
+SPO is Self-Play Preference Optimisation (Swamy et al. 2024, arXiv:2401.04056),
+which the Jackpot paper (Maura-Rivero et al. 2025, arXiv:2501.19266) uses to
+train towards the maximal lottery.
+
 Each iteration samples a batch of completions for the fixed prompt (10% replaced
 by uniformly random colour words, per A.8), scores sample i with
 r_i = mean_j P(colour_i > colour_j) under the empirical preference function of
@@ -70,15 +74,17 @@ def run(storage: Storage, profile: dict, config_name: str, force: bool = False) 
         prompt = prompt_for(profile, pop.prompt_key)
         query = tokenizer(prompt, return_tensors="pt")["input_ids"][0].to(device)
         forced_ids = {
-            c: tokenizer(" " + c, add_special_tokens=False, return_tensors="pt")["input_ids"][0].to(device)
+            c: tokenizer(" " + c, add_special_tokens=False,
+                         return_tensors="pt")["input_ids"][0].to(device)
             for c in pop.alternatives
         }
         max_new = profile["eval"]["max_new_tokens"]
         n_forced = int(tp["uniform_colour_fraction"] * tp["batch_size"])
 
-        loop = tc.TrainingLoop(out, policy, tokenizer, pop.alternatives, tag=f"[spo/{config_name}]",
-                               epochs=tp["epochs"],
-                               steps_per_epoch=max(1, profile["data"]["n_datapoints"] // tp["batch_size"]))
+        steps_per_epoch = max(1, profile["data"]["n_datapoints"] // tp["batch_size"])
+        loop = tc.TrainingLoop(out, policy, tokenizer, pop.alternatives,
+                               tag=f"[spo/{config_name}]", epochs=tp["epochs"],
+                               steps_per_epoch=steps_per_epoch)
         mixture = tc.MixtureAccumulator(pop.alternatives)
         for epoch, it in loop.epochs_and_steps():
             queries, responses = tc.generate_responses(

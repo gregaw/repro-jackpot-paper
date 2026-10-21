@@ -2,16 +2,16 @@
 
 Claims about the dynamics of Algorithm 1 cost GPU-hours per data point to test on
 a language model. Replacing the LLM with a 3-way softmax over the colour words keeps the parts
-under test — the preference function, the Algorithm 1 reward, the PPO-style
+under test (the preference function, the Algorithm 1 reward, the PPO-style
 advantage-whitened policy-gradient step, the forced-uniform 10%, and the choice of
-output policy — and drops only the language model. It runs in under a second on CPU.
+output policy) and drops only the language model. It runs in under a second on CPU.
 
 The two properties it demonstrates:
 
 1. `last iterate != uniform mixture`. On the cyclic population the maximal lottery is
    genuinely mixed (1/3 each). Algorithm 1 reaches it only through its stated output,
    `Return: uniform mixture of pi_1:T` (A.8, Algorithm 1). The last iterate orbits the
-   simplex forever and never settles — which is what no-regret dynamics on a zero-sum
+   simplex forever and never settles, which is what no-regret dynamics on a zero-sum
    cycle do. Evaluating a single checkpoint therefore cannot reproduce the paper's
    right-hand column no matter how well the LLM is trained.
 
@@ -19,7 +19,7 @@ The two properties it demonstrates:
    (= the paper's left column, and identical to `iia_3alt`), red has the highest mean
    pairwise score against a uniform opponent (0.70 vs blue 0.60), so the first phase of
    training pushes toward red. Blue only overtakes once green has been squeezed out of
-   the policy's support. A run that stops — or is checkpointed — before that crossover
+   the policy's support. A run that stops, or is checkpointed, before that crossover
    reports red, or a red/blue mixture, rather than the paper's near-1.0 blue.
 
 Exogenous unparsed mass `q` (the fraction of the batch that names no colour) dilutes
@@ -41,9 +41,9 @@ Options for screening recipes before paying for GPU runs:
   severed runs are the *drift-free* best case for gamma=0.)
 - `table="empirical"`: score with the empirical preference function over the
   2048 seed-7 triplets (P(B>R)=0.583, P(B>G)=0.550) instead of the population
-  margins — the harsher table training actually sees.
-- `kl_fixed_point()`: the self-consistent optimum p ∝ base * exp(r(q)/beta),
-  q = (1-forced)*p + forced*uniform — where training would settle with credit
+  margins: the harsher table training actually sees.
+- `kl_fixed_point()`: the self-consistent optimum p ~ base * exp(r(q)/beta),
+  q = (1-forced)*p + forced*uniform: where training would settle with credit
   restored, independent of trajectory/learning-rate questions.
 
 Usage:
@@ -128,7 +128,7 @@ def algorithm1_rewards(samples: list, pref) -> list[float]:
 def rarity_bonus(samples: list, beta: float) -> list[float]:
     """Alternative-level exploration bonus (not used by the pipeline):
     b_i = beta * (-log q_hat(colour_i)) with q_hat the batch's parsed-colour
-    frequency. Unparsed samples get no bonus — the bonus pays for rare
+    frequency. Unparsed samples get no bonus: the bonus pays for rare
     *colours*, never for gibberish."""
     if not beta:
         return [0.0] * len(samples)
@@ -172,7 +172,7 @@ def kl_fixed_point(config_name: str, *, base_prior: dict, kl_coef: float,
                    pref=None, uniform_colour_fraction: float = 0.1,
                    iterations: int = 2000, damping: float = 0.9) -> dict:
     """Self-consistent optimum of E[r(a, q)] - kl_coef * KL(pi || base):
-    pi ∝ base * exp(r(·, q)/kl_coef) with q = (1-f)*pi + f*uniform.
+    pi ~ base * exp(r(., q)/kl_coef) with q = (1-f)*pi + f*uniform.
     kl_coef=0 sends the optimum to the argmax vertex of the limiting rewards."""
     pop = CONFIGS[config_name]
     alts = list(pop.alternatives)
@@ -212,7 +212,7 @@ def run_spo(config_name: str, *, iterations: int = 480, batch_size: int = 128,
     """One SPO run. Returns the last iterate, the uniform mixture of pi_1:T, and the
     per-iteration trace of both.
 
-    `learning_rate` is a simplex-space step size, not the LLM's 1e-4 — the map between
+    `learning_rate` is a simplex-space step size, not the LLM's 1e-4; the map between
     them depends on the LoRA parameterisation. Conclusions here are about the *shape* of
     the trajectory (does it settle? in what order?), which is what A.8 pins down; they
     are not a prediction of wall-clock convergence step counts.

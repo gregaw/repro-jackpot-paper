@@ -3,7 +3,12 @@
 import math
 from pathlib import Path
 
-from pipeline.models import TINY_SENTINEL, build_tokenizer, lora_config, tiny_gemma2_config
+from pipeline.models import (
+    TINY_SENTINEL,
+    build_tokenizer,  # noqa: F401  (the trainers call it as tc.build_tokenizer)
+    lora_config,
+    tiny_gemma2_config,
+)
 from pipeline.stages.evaluate import parse_colour
 from pipeline.storage import Storage
 

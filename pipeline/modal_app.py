@@ -148,7 +148,8 @@ def orchestrate(stage: str, config: str, method: str, run_id: str, force: bool,
         if want(stage_name):
             pairs = [(c, m, run_id, force, seed) for c in configs for m in methods]
             for r in fn.starmap(pairs, return_exceptions=True):
-                results.setdefault(stage_name, []).append(repr(r) if isinstance(r, Exception) else r)
+                result = repr(r) if isinstance(r, Exception) else r
+                results.setdefault(stage_name, []).append(result)
                 note(stage_name, r)
     if want("plot"):
         results["plot"] = plot.remote(run_id, force, seed)
@@ -221,8 +222,9 @@ def main(stage: str = "all", config: str = "all", method: str = "all",
         return
 
     call = orchestrate.spawn(stage, config, method, run_id, force, seed_opt)
+    seed_label = "profile default" if seed_opt is None else seed_opt
     print(f"dispatched: {call.object_id} (run_id={run_id}, profile={PROFILE_NAME}, "
           f"train_overrides={TRAIN_OVERRIDES or 'none'}, "
-          f"gpu={GPU_TRAIN}/{GPU_EVAL}, seed={'profile default' if seed_opt is None else seed_opt}, "
+          f"gpu={GPU_TRAIN}/{GPU_EVAL}, seed={seed_label}, "
           f"git_sha={GIT_SHA})")
     print(f"poll with: modal run pipeline/modal_app.py --stage status --run-id {run_id}")

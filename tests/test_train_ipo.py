@@ -124,7 +124,8 @@ def test_reference_is_adapter_off():
 
 
 # --- a one-token toy policy: the stage's loss reaches the regularised Nash
-#     equilibrium online and the Borda winner offline (cf. 0086 report §2.3)
+#     equilibrium online and the Borda winner offline, as in the exact solutions
+#     of results/experiments_ipo_coval.md, section 3
 
 def _preference_matrix(config):
     pop = CONFIGS[config]
@@ -139,7 +140,7 @@ def _preference_matrix(config):
 
 
 def _regularised_nash(m, tau, iters=20_000):
-    """pi ∝ ref exp(P(y > pi) / tau), uniform ref, by damped fixed point."""
+    """pi ~ ref exp(P(y > pi) / tau), uniform ref, by damped fixed point."""
     pi = torch.full((m.shape[0],), 1 / m.shape[0], dtype=torch.float64)
     m = m.double()
     for _ in range(iters):

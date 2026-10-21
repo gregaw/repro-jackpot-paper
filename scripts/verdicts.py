@@ -8,13 +8,13 @@ table with, per cell, the empirical distribution and a PASS/FAIL verdict against
 the paper's expectation (Section 6.3).
 
 Judging rules:
-- The judged distribution is **unconditional** — P(colour) over every sample
+- The judged distribution is **unconditional**: P(colour) over every sample
   drawn, unparsed included in the denominator. The paper's claims are about the
   policy's output, not P(colour | named a colour).
 - For ML cells, when the eval carries the training-time **uniform mixture of
   iterates** (Algorithm 1's actual output policy, `mixture` key), the mixture is
   judged; the single-checkpoint eval is shown for reference only.
-- `majority` and `iia_3alt` are the **same population** (paper §6.3.2) — an
+- `majority` and `iia_3alt` are the **same population** (paper section 6.3.2), an
   unintended n=2 replicate, not two experiments. Their disagreement is reported
   as the run's variance estimate.
 
@@ -27,8 +27,8 @@ import sys
 from pathlib import Path
 
 # Thresholds for turning the paper's qualitative claims into a check.
-# "converges to / collapses to X" means close to one (paper §6.3); the old 0.50
-# turned blue=0.501 into a PASS, which is a threshold artefact, not agreement.
+# "converges to / collapses to X" means close to one (paper section 6.3); a bar
+# of 0.50 would pass blue = 0.501, which is a threshold artefact, not agreement.
 DOMINANT = 0.80
 UNIFORM_DEV = 0.10  # "~1/3 each": every colour share within this of 1/3
 
@@ -44,7 +44,9 @@ EXPECTED = {
 }
 PAPER_CELLS = list(EXPECTED)
 # Online IPO is a second Maximal Lottery method, judged on its last iterate; the
-# offline-IPO control is predicted to behave like RLHF (experiment 0086).
+# offline-IPO control is predicted to behave like RLHF, because the same loss on a
+# fixed dataset picks the Borda winner (experiment 0086, Online IPO;
+# results/experiments_ipo_coval.md, section 3).
 EXPECTED.update({(c, "ipo"): EXPECTED[(c, "ml")] for c, _ in PAPER_CELLS})
 EXPECTED.update({(c, "ipo_offline"): EXPECTED[(c, "rlhf")] for c, _ in PAPER_CELLS})
 
@@ -61,8 +63,8 @@ DESCRIPTION = {
 DESCRIPTION.update({(c, "ipo"): DESCRIPTION[(c, "ml")] for c, _ in PAPER_CELLS})
 DESCRIPTION.update({(c, "ipo_offline"): DESCRIPTION[(c, "rlhf")] for c, _ in PAPER_CELLS})
 
-# Same voter profile, same alternatives, same prompt — one RNG stream apart
-# (pipeline/populations.py; paper §6.3.2 "coincides with the experiment in
+# Same voter profile, same alternatives, same prompt, one RNG stream apart
+# (pipeline/populations.py; paper section 6.3.2 "coincides with the experiment in
 # Section 6.3.1"). Verdicts are per-cell but the pair is one experiment run
 # twice, and its internal disagreement bounds what any single draw can show.
 REPLICATES = ("majority", "iia_3alt")

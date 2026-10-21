@@ -16,8 +16,9 @@ no forced-colour substitution (that would make the pairs partly off-policy).
 
 Offline IPO (method "ipo_offline") is the same loss on the data_gen triplets,
 `prompt + " chosen."` against `prompt + " rejected."` with target 1/(2 tau):
-standard IPO on a fixed dataset. The 0086 tabular simulation predicts it picks
-the Borda winner and flips on IIA, like RLHF.
+standard IPO on a fixed dataset. Solved exactly on a softmax over the colours,
+it picks the Borda winner and flips on IIA, like RLHF (experiment 0086, Online
+IPO; results/experiments_ipo_coval.md, section 3).
 """
 
 import random

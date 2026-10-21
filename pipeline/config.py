@@ -69,7 +69,8 @@ def train_params(profile: dict, method: str, config_name: str | None = None) -> 
             "mini_batch_size": spo["mini_batch_size"],
             "learning_rate": spo["learning_rate"],
             # tau 0.05, no momentum, lr decay over the last quarter: the
-            # setting that passed all four Qwen cells (0086 results.md)
+            # setting that passed all four Qwen cells (experiment 0086, Online
+            # IPO; results/experiments_ipo_coval.md, section 5)
             "tau": 0.05,
             "max_grad_norm": 1.0,
             "adam_beta1": 0.0,                    # momentum makes the cycle orbit
@@ -77,7 +78,8 @@ def train_params(profile: dict, method: str, config_name: str | None = None) -> 
             "lr_decay_frac": 0.25,                # linear lr decay over this final share of steps
         }
     else:
-        raise ValueError(f"unknown method {method!r}")
+        raise ValueError(f"unknown method {method!r}, expected one of "
+                         f"('ml', 'rlhf', 'ipo', 'ipo_offline')")
     train = profile.get("train") or {}
     # the offline-IPO control shares the online arm's settings unless told otherwise
     layers = ("ipo", "ipo_offline") if method == "ipo_offline" else (method,)

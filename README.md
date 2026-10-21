@@ -1,155 +1,111 @@
 # Reproduction of "Jackpot! Alignment as a Maximal Lottery"
 
-An independent reproduction of the synthetic colour-preference experiments of
-Maura-Rivero et al., *Jackpot! Alignment as a Maximal Lottery*
-([arXiv:2501.19266](https://arxiv.org/abs/2501.19266), Section 6.3 and Figure 2): RLHF
-(reward model + PPO) against a Maximal Lottery objective (SPO), over four voter
-populations.
+This repository contains an independent reproduction of the synthetic colour-preference
+experiments of Maura-Rivero et al., [*Jackpot! Alignment as a Maximal Lottery*](https://arxiv.org/abs/2501.19266)
+(Section 6.3 and Figure 2). It trains a small language model to name its favourite colour
+under two objectives, RLHF (a reward model, then PPO) and the paper's Maximal Lottery
+objective (SPO), over four synthetic voter populations, and checks the outcome against the
+paper's predictions. The paper's claim reproduces on its own model, Gemma-2-2B, in all eight
+cells: RLHF behaves like the Borda count, the Maximal Lottery picks the Condorcet winner and
+splits a cycle evenly.
 
-The full write-up is [`results/reproduction_report.md`](results/reproduction_report.md).
-The reproduction is the main result of this repository. Two documents were added to it
-afterwards:
+Paper: [arXiv:2501.19266](https://arxiv.org/abs/2501.19266) by Roberto-Rafael Maura-Rivero,
+Marc Lanctot, Francesco Visin and Kate Larson. This is not a fork of the authors' code. The
+write-ups that go with the code:
 
-- [`results/deep-dive-overview.md`](results/deep-dive-overview.md): a walkthrough of how the
-  pipeline works, with links into the code: SPO, RLHF/PPO and the Online IPO method added later.
-- [`results/experiments_ipo_coval.md`](results/experiments_ipo_coval.md): an additional
-  experiment beyond the original paper. Online IPO, trained on the policy's own samples,
-  reaches the Maximal Lottery from its final checkpoint, while the same loss trained offline
-  reproduces Borda; the CoVal dataset of real rankings has too few voters per prompt for its
+- [`results/reproduction_report.md`](results/reproduction_report.md): the reproduction, every
+  setting we changed from the paper's Appendix A.8 and why, costs, and limits. This is the
+  main result.
+- [`results/experiments_ipo_coval.md`](results/experiments_ipo_coval.md): an addition beyond
+  the paper. Online IPO, trained on the policy's own samples, reaches the maximal lottery from
+  its final checkpoint, while the same loss trained offline reproduces Borda. It also finds
+  that the CoVal dataset of real rankings has too few voters per prompt for its
   Borda/Condorcet disagreements to survive resampling.
+- [`results/deep-dive-overview.md`](results/deep-dive-overview.md): a walkthrough of how SPO,
+  RLHF/PPO and Online IPO work here, with links to the lines of code that implement each step.
 
-## What this repository contributes
-
-**The paper reproduces.** On the paper's own model, Gemma-2-2B, all eight cells of Figure 2
-come out as Section 6.3 describes: RLHF collapses to the Borda winner, flips when an
-irrelevant alternative is added (blue, the Condorcet winner, with two options; red, the
-Borda winner, once green is added), and picks one arbitrary colour on a cycle; the Maximal
-Lottery arm returns the Condorcet winner, ignores the irrelevant alternative, and goes
-roughly uniform on the cycle. This is an independent implementation, not a fork of the
-authors' code.
-
-**It is ready to run, and validated.** `pytest tests/` drives all 21 cells of the pipeline
-end to end on CPU in about 30 seconds — no GPU, no network, no credentials — before you
-spend anything. A full Gemma grid is then one `modal run` command, about three hours and
-about \$11 of GPU time, and `scripts/verdicts.py` scores the outcome against the paper's
-prediction under rules fixed in advance, exiting non-zero unless all eight cells pass.
-
-**A small model shows the same behaviour, more cheaply.** We added a Qwen2.5-0.5B profile —
-a quarter of the size, and it runs on the free tier's L4 for about \$6. Seven of the eight
-cells reproduce. The behaviour is real at this scale but less clean: the IIA flip goes in
-the paper's direction (red ahead at both anchors) without collapsing past our 0.80 bar,
-because Qwen's reward model has a thinner red-over-blue margin on that draw. Its value was
-in cheap iteration: once a fix was in, a Qwen canary cost about \$1 to \$2, and only
-settings that passed on Qwen were run on Gemma.
-
-**The changes we needed are recorded.** We were not able to reproduce the result with the
-hyperparameters of Appendix A.8 as we read them. The report lists every setting we changed,
-with the reason for each, and the four defects that cost the most are written up with how they showed, how they
-were found, and what they cost — the SPO discount factor read as 0 (no preference gradient
-ever reached the colour token), generation degenerating after convergence, an RLHF reward
-computed on text the reward model had never seen, and a KL anchor too tight on one cell.
-A clean run costs about \$11. Getting to the point where the run was clean cost about \$83,
-and the report accounts for the difference problem by problem.
-
-**The Modal infrastructure is reusable.** The pipeline is stage-based with content-hashed
-manifests, so any subset re-runs and the rest is skipped; `pipeline/stages/` is plain Python
-with no Modal import, so the CPU test runs the same training and evaluation code as the GPU
-runs, not a mock of it. If you
-are running experiments of this shape, this is the part worth lifting. What we liked about
-Modal: the free tier goes further than you would expect — many GPUs in parallel, a real
-choice of hardware (we screen on L4 and train on L40S from the same code), and storage
-integrated well enough that artifacts just persist across runs.
-
-Since the environment has sharp edges, the traps we hit are in the run instructions below —
-`--detach` above all.
-
-## How this was built
-
-The code, the experiment runs and the report were written by AI agents using
-[Claude Code](https://claude.com/claude-code). The author guided the work rather than
-typing it. Specifically:
-
-- **Implementation.** The author set the scope, the general architecture, the order of work
-  and the budget for each step, and decided which fixes to pursue when a run failed.
-- **Verification.** No GPU money was spent until the CPU end-to-end test passed. One cell
-  was run and watched before the rest. The pass/fail rules were fixed in
-  `scripts/verdicts.py` before the final runs. The author verified the results and
-  iterated on the final outcome.
-- **The write-up.** The author edited both this README and the report for the reader: less
-  lab notebook, more plain explanation, with the details moved into appendices. They are
-  more readable for it, if still dense in places.
-
-## What the pipeline does
+## How it works
 
 | Stage | What it produces |
 | --- | --- |
 | `data_gen` | 2048 preference triplets per population, sampled from the voter profile |
-| `train` (`rlhf`) | a reward model fine-tuned on the triplets, then a PPO policy against it |
+| `train` (`rlhf`) | a reward model fine-tuned on the triplets, then a PPO policy trained against it |
 | `train` (`ml`) | a policy trained with SPO against the empirical preference function, plus the mixture of iterates |
+| `train` (`ipo`, `ipo_offline`) | Online IPO, and the same loss trained offline on the triplets as a control |
 | `eval` | 1000 samples from each trained policy, parsed into a colour distribution |
 | `plot` | Figure 2: training curves for the three experiments |
 
 Every stage writes `manifest.json` last, on success, keyed by a hash of its parameters. A
-stage that already has a matching manifest is skipped, so any subset can be re-run and
-`--force` re-runs a stage regardless.
+stage that already has a matching manifest is skipped, so any subset can be re-run, and
+`--force` re-runs a stage regardless. `pipeline/stages/` is plain Python with no Modal
+import, so the CPU test runs the same training and evaluation code as the GPU runs.
+`pipeline/modal_app.py` wraps the stages as Modal GPU functions.
 
-Layout:
-
-- `pipeline/` — the stages (`stages/`, plain Python with no Modal dependency), config and
-  storage helpers, and the Modal wrapper `modal_app.py`
-- `configs/` — `experiments.yaml` (Gemma-2-2B, the hyperparameters that produced the report),
-  `qwen.yaml` (a cheaper screening model), `smoke.yaml` (the CPU test),
-  `paper_hparams.yaml` (Appendix A.8 as extracted), `requirements-gpu.txt`, `rates.yaml`
-- `scripts/` — verdicts, artifact fetching, run watching, cost pricing, model export, and a
-  CPU simulation of Algorithm 1
-- `tests/` — unit tests and a CPU end-to-end run of the whole pipeline
-- `results/` — the reproduction report and its figures, plus the two additions: the deep-dive
-  overview and the Online IPO / CoVal write-up with its figures
-
-## Prerequisites
-
-- Python 3.11 and [`uv`](https://github.com/astral-sh/uv) (or any way to make a venv). The
-  pinned `torch` has no wheel for Python 3.13 or newer, and the Modal image runs 3.11.
-- A [Modal](https://modal.com) account. The L40S that Gemma-2-2B trains on needs a payment
-  method on the account; the free tier's L4 is enough for the Qwen profile and for evaluation.
-- A Hugging Face account with the Gemma licence accepted at
-  [huggingface.co/google/gemma-2-2b](https://huggingface.co/google/gemma-2-2b) and a read token.
-  Qwen2.5-0.5B is not gated.
+**Where Claude comes in.** No stage calls Claude or any other hosted LLM. The voters are
+synthetic, the preferences are computed from their rankings, and the models trained are
+open weights. A run needs no API key beyond Modal's and a Hugging Face read token. The code,
+the experiment runs and the write-ups were made with [Claude Code](https://claude.com/claude-code),
+Anthropic's coding agent, under the author's direction: the author set the scope, the
+architecture, the order of work and the budget for each step, decided which fixes to pursue,
+and checked the results. Comments that cite a numbered experiment ("experiment 0086") refer
+to that development history and are kept as provenance.
 
 ## Setup
 
+1. Python 3.11 and [uv](https://docs.astral.sh/uv/). The pinned `torch` has no wheel for
+   Python 3.13 or newer, and the Modal image runs 3.11.
+
+   ```bash
+   uv venv --python 3.11 .venv
+   uv pip install --python .venv/bin/python -r configs/requirements-gpu.txt modal pytest
+   ```
+
+2. A [Modal](https://modal.com) account. The L40S that Gemma-2-2B trains on needs a payment
+   method on the account; the free tier's L4 is enough for the Qwen profile and for evaluation.
+
+   ```bash
+   .venv/bin/modal token new     # or set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET
+   ```
+
+3. A Hugging Face read token, with the Gemma licence accepted at
+   [huggingface.co/google/gemma-2-2b](https://huggingface.co/google/gemma-2-2b).
+   Qwen2.5-0.5B is not gated, but the wrapper attaches the secret to every GPU function.
+
+   ```bash
+   .venv/bin/modal secret create huggingface-secret HF_TOKEN=hf_...   # once per Modal workspace
+   ```
+
+No credential is read from a file in this repository. Modal keeps its token in
+`~/.modal.toml`; the Hugging Face token lives only in the Modal secret. Two optional
+environment variables change what a dispatch runs: `JACKPOT_PROFILE` (a profile other than
+Gemma, below) and `JACKPOT_TRAIN_OVERRIDES` (JSON merged over the profile's training settings).
+
+## Quick check
+
 ```bash
-uv venv --python 3.11 .venv
-uv pip install --python .venv/bin/python -r configs/requirements-gpu.txt modal pytest
-
-.venv/bin/modal token new                                        # or export MODAL_TOKEN_ID / MODAL_TOKEN_SECRET
-.venv/bin/modal secret create huggingface-secret HF_TOKEN=hf_...  # once per Modal workspace
-```
-
-No credential is read from a file in this repository. Modal stores its token in
-`~/.modal.toml`; the Hugging Face token lives only in the Modal secret.
-
-## Step 1: run the local test
-
-```bash
-.venv/bin/python -m pytest tests/
+.venv/bin/python -m pytest
 ```
 
 This runs the unit tests and `tests/test_e2e_local.py`, which drives every stage on CPU with
-a tiny random model in about 30 seconds. It needs no GPU, no network and no credentials. Do
-not spend GPU time until it passes.
+a tiny random model in about 30 seconds. It needs no GPU, no network and no credentials. Run
+it before spending anything on GPUs.
 
-## Step 2: run the pipeline
+## Reproducing the results
+
+All commands run from the repository root.
+
+### Figure 2 and the verdict table (report sections 2 and 3)
 
 ```bash
 .venv/bin/modal run --detach pipeline/modal_app.py --run-id my-run
 ```
 
-`--detach` matters: the orchestrator runs on Modal, and without it the run dies when your
-terminal closes. The command returns within seconds and prints the app id. The run then
+`--detach` matters: the orchestrator runs on Modal, and without it the run dies when the
+local client exits. The command returns within seconds and prints the app id. The run then
 downloads the model into the Modal Volume once, generates data, trains the eight cells (at
-most four at a time), evaluates them and renders the figure. Expect two to three hours of
-wall-clock time. Artifacts persist on the Volume `jackpot-artifacts` under `runs/my-run/`.
+most four at a time), evaluates them and renders the figure. It takes two to three hours and
+costs **about \$11 on Gemma-2-2B** (training on an L40S, evaluation on an L4; report
+Appendix F). Artifacts land on the Volume `jackpot-artifacts` under `runs/my-run/`.
 
 To watch it:
 
@@ -160,9 +116,45 @@ To watch it:
 ```
 
 A failed cell does not stop the run; the orchestrator prints `CELL FAILED` and the status
-table shows the gap. Re-dispatching the same command retries only the missing cells.
+table shows the gap. Dispatching the same command again retries only the missing cells.
 
-Useful variants:
+Then fetch the results and judge them:
+
+```bash
+.venv/bin/modal run scripts/fetch_artifacts.py --run-id my-run --dest results/runs/my-run
+.venv/bin/python scripts/verdicts.py results/runs/my-run/eval
+.venv/bin/python scripts/report_costs.py results/runs/my-run
+```
+
+`verdicts.py` prints one row per cell with the sampled distribution and a PASS/FAIL against
+the paper's prediction, and exits 0 only if all eight pass. A colour "wins" at a share of at
+least 0.80, and "uniform" means every share is within 0.10 of 1/3. Maximal Lottery cells are
+judged on the mixture of iterates (Algorithm 1's output policy), RLHF cells on the final
+checkpoint. `report_costs.py` prices the per-stage timings at the rates in
+`configs/rates.yaml`; the Modal usage page is the authoritative figure. Figure 2 is at
+`results/runs/my-run/plot/figure2.png`; the figures of the reported runs are checked in as
+[`results/figure2_gemma-2-2b.png`](results/figure2_gemma-2-2b.png) and
+[`results/figure2_qwen2.5-0.5b.png`](results/figure2_qwen2.5-0.5b.png).
+
+### The cheaper Qwen2.5-0.5B profile (report Appendix D)
+
+```bash
+JACKPOT_PROFILE=qwen .venv/bin/modal run --detach pipeline/modal_app.py --run-id my-qwen-run
+```
+
+The same grid on a model a quarter of the size, on L4s, for **about \$6**. Repeat the
+`JACKPOT_PROFILE=qwen` prefix on every train or eval dispatch for that run (status and fetch
+do not need it), or the next dispatch retrains the cells as Gemma.
+
+### Online IPO and CoVal (the IPO write-up)
+
+Appendix B of [`results/experiments_ipo_coval.md`](results/experiments_ipo_coval.md) gives the
+commands for each of its tables and figures. The GPU runs use the same pipeline with
+`--method ipo` or `--method ipo_offline` on the Qwen profile (about \$11 for everything in
+that write-up); the tabular solutions, the CoVal analysis and the figures run on CPU from
+[`scripts/ipo_coval/`](scripts/ipo_coval/).
+
+### Useful variants
 
 ```bash
 # one cell, to check timings and memory before the rest
@@ -172,12 +164,11 @@ Useful variants:
 .venv/bin/modal run --detach pipeline/modal_app.py --stage eval --force --run-id my-run
 .venv/bin/modal run --detach pipeline/modal_app.py --stage train --config majority --method ml --force --run-id my-run
 
-# another data/training seed (artifacts land under runs/my-run-s8/)
+# another data and training seed (artifacts land under runs/my-run-s8/)
 .venv/bin/modal run --detach pipeline/modal_app.py --seed 8 --run-id my-run
 
-# the cheaper screening model on an L4; repeat the prefix on every train/eval dispatch for
-# that run (status and fetch do not need it), or the next dispatch retrains it as Gemma
-JACKPOT_PROFILE=qwen .venv/bin/modal run --detach pipeline/modal_app.py --run-id my-qwen-run
+# sample a trained policy interactively (it answers one fixed prompt with a colour; not a chat model)
+.venv/bin/modal run pipeline/modal_app.py --stage chat --config cyclic --method ml --run-id my-run
 ```
 
 Hyperparameters live in `configs/experiments.yaml`: Appendix A.8 values from
@@ -185,25 +176,8 @@ Hyperparameters live in `configs/experiments.yaml`: Appendix A.8 values from
 `train.cells:`. Changing one changes the cell's parameter hash, so the next dispatch
 retrains that cell and leaves the others alone.
 
-## Step 3: fetch the results and judge them
-
-```bash
-.venv/bin/modal run scripts/fetch_artifacts.py --run-id my-run --dest results/runs/my-run
-.venv/bin/python scripts/verdicts.py results/runs/my-run/eval
-.venv/bin/python scripts/report_costs.py results/runs/my-run
-```
-
-`fetch_artifacts.py` pulls the figure, every `distributions.json`, `metrics.jsonl`,
-`mixture.json`, `rm_scores.json`, `cost.json` and `manifest.json`, keeping the Volume's
-layout. `verdicts.py` prints one row per cell with the sampled distribution and a
-PASS/FAIL against the paper's prediction, and exits 0 only if all eight pass. Maximal
-Lottery cells are judged on the mixture of iterates (Algorithm 1's output policy); RLHF
-cells on the final checkpoint. `report_costs.py` prices the per-stage timings at the rates
-in `configs/rates.yaml`; the Modal usage page is the authoritative figure.
-
-Figure 2 is at `results/runs/my-run/plot/figure2.png`. The plot stage only reads
-`metrics.jsonl` and `distributions.json`, so it can also be re-rendered locally from the
-fetched tree, for example after combining cells from several runs:
+The plot stage only reads `metrics.jsonl` and `distributions.json`, so Figure 2 can be
+re-rendered locally from a fetched run, for example after combining cells from several runs:
 
 ```bash
 .venv/bin/python -c "
@@ -211,27 +185,93 @@ from pipeline.config import load_profile; from pipeline.stages import plot; from
 plot.run(Storage('results', 'my-run'), load_profile('paper'), force=True)"
 ```
 
-## Other tools
+## Main result
 
-- `--stage chat --config cyclic --method ml --run-id my-run` samples a trained policy
-  interactively. These policies answer one fixed prompt with a colour; they are not chat models.
-- `scripts/export_model.py --config cyclic --method ml --run-id my-run [--merge]` downloads
-  an adapter, optionally merged into the base weights. It uses `modal volume get`.
-- `scripts/spo_simplex_sim.py` runs Algorithm 1 in the probability simplex with no language
-  model, in under a second. It shows why the mixture of iterates, not the last iterate, is
-  what converges on the cyclic population. It replaces the language model with a
-  three-way choice between the colours and keeps everything else in Algorithm 1: the
-  win-rate reward, the 10% random colours, the policy-gradient step and the mixture of
-  iterates. It says how the algorithm behaves, not whether a language model trained with
-  PPO behaves that way, which is the paper's claim; it was used to explain results and to
-  screen settings before paying for GPU runs.
-- `scripts/extract_hparams.py <pdf>` regenerates `configs/paper_hparams.yaml` and
-  `configs/a8_raw.txt` from the paper's PDF (`pip install pypdf`).
+Gemma-2-2B, 1000 samples per cell, shares blue / green / red
+(`scripts/verdicts.py`; report section 2):
 
-## Expected results (paper Section 6.3)
-
-| Population | RLHF | Maximal Lottery |
+| Population | RLHF | Maximal Lottery (mixture of iterates) |
 | --- | --- | --- |
-| majority: 2×(R>G>B), 3×(B>R>G) | collapses to red (Borda winner) | converges to blue (Condorcet winner) |
-| IIA: 2×(R>B), 3×(B>R), then add an irrelevant G | blue, then flips to red | blue in both |
-| cyclic: 1×(R>G>B), 1×(G>B>R), 1×(B>R>G) | collapses to one arbitrary colour | about 1/3 each |
+| majority: 2x(R>G>B), 3x(B>R>G) | red 1.00 (paper: red, the Borda winner) | blue 0.96 (paper: blue, the Condorcet winner) |
+| IIA, two options: 2x(R>B), 3x(B>R) | blue 0.94 (paper: blue) | blue 0.94 (paper: blue) |
+| IIA, green added | red 0.83 (paper: flips to red) | blue 0.94 (paper: stays blue) |
+| cyclic: 1x(R>G>B), 1x(G>B>R), 1x(B>R>G) | blue 0.99 (paper: one arbitrary colour) | 0.38 / 0.27 / 0.34 (paper: about 1/3 each) |
+
+All eight cells pass. On Qwen2.5-0.5B seven of eight pass: on "IIA, green added" RLHF goes
+the paper's way (red 0.52 against blue 0.48) but stays under the 0.80 bar.
+
+## Reference
+
+| Config | What it is |
+| --- | --- |
+| `configs/experiments.yaml` | the Gemma-2-2B profile, with the hyperparameters behind the report |
+| `configs/qwen.yaml` | the Qwen2.5-0.5B profile (`JACKPOT_PROFILE=qwen`), also used by the IPO write-up |
+| `configs/smoke.yaml` | the tiny-model profile of the CPU test |
+| `configs/paper_hparams.yaml` | Appendix A.8 as extracted from the paper; `a8_raw.txt` is the raw text |
+| `configs/rates.yaml` | Modal list prices used by `scripts/report_costs.py` |
+| `configs/requirements-gpu.txt` | exact pins of the GPU image (trl 0.10.1, the version the paper names) |
+
+| Script | What it does |
+| --- | --- |
+| `scripts/verdicts.py` | judges evaluated cells against the paper's predictions |
+| `scripts/fetch_artifacts.py` | downloads a run's small files from the Modal Volume |
+| `scripts/report_costs.py` | prices a fetched run's per-stage timings |
+| `scripts/watch.py` | watches a detached run and flags degenerate generation |
+| `scripts/export_model.py` | downloads a trained adapter, optionally merged into the base weights (uses `modal volume get`) |
+| `scripts/spo_simplex_sim.py` | Algorithm 1 in the probability simplex with no language model, in under a second; shows why the mixture of iterates, not the last iterate, converges on the cycle |
+| `scripts/extract_hparams.py` | regenerates `configs/paper_hparams.yaml` from the paper's PDF (`pip install pypdf`) |
+| `scripts/ipo_coval/` | the CPU parts of the IPO write-up: tabular IPO, the CoVal analysis, its figures |
+
+## Layout
+
+```
+pipeline/            stage wiring, config, storage and manifests, and the Modal wrapper
+  stages/            data_gen, train_spo, train_rlhf, train_ipo, evaluate, plot (no Modal imports)
+configs/             model profiles, the paper's hyperparameters, pins and prices
+scripts/             verdicts, fetching, watching, costs, the simplex simulation
+  ipo_coval/         CPU scripts and data for the IPO write-up
+tests/               unit tests and the CPU end-to-end run of the whole pipeline
+results/             the report, the two additional write-ups, and their figures
+```
+
+## Known limits
+
+- Every cell is a single seed. `majority` and `iia_3alt` are the same population on two
+  draws of the data, and differ by about 0.14 on the Maximal Lottery arm and 0.17 on RLHF.
+- Five per-cell KL anchors (three on Gemma, two on Qwen) were chosen after seeing results;
+  the paper uses one setting per arm (report Appendix A).
+- We generate 8 tokens per answer. The paper does not say how many it generated; if it was
+  one, several of our deviations from A.8 may be artefacts of this choice (report section 4).
+- The colour parser matches substrings, so `" hundred"` parses as red. Re-parsing the
+  reported samples with word boundaries changes none of them.
+- The reward model trains at learning rate 1e-4 where A.8's "trl defaults" would mean 5e-5.
+- The Gemma cyclic RLHF cell's colour came out of a breakdown and recovery, not where
+  training converged (report Appendix C).
+
+## Citation
+
+Please cite the paper:
+
+```bibtex
+@article{maurarivero2025jackpot,
+  author  = {Maura-Rivero, Roberto-Rafael and Lanctot, Marc and Visin, Francesco and Larson, Kate},
+  title   = {Jackpot! Alignment as a Maximal Lottery},
+  journal = {arXiv preprint arXiv:2501.19266},
+  year    = {2025}
+}
+```
+
+and, if you use this code, the reproduction:
+
+```bibtex
+@misc{gawron2026jackpotrepro,
+  author = {Gawron, Grzegorz},
+  title  = {Reproduction of "Jackpot! Alignment as a Maximal Lottery"},
+  year   = {2026},
+  url    = {https://github.com/gregaw/repro-jackpot-paper}
+}
+```
+
+## Licence and contact
+
+MIT, see [`LICENSE`](LICENSE). Questions and bug reports are welcome as GitHub issues.

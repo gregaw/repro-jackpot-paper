@@ -58,7 +58,7 @@ def test_uniform_rule():
 
 def test_cyclic_ml_judged_on_mixture_unconditional(tmp_path, capsys):
     # checkpoint says near-pure red (a mid-orbit snapshot); the mixture says
-    # uniform — Algorithm 1's output policy is what must be judged
+    # uniform; Algorithm 1's output policy is what must be judged
     cell = checkpoint_cell({"red": 400, "blue": 30, "green": 20}, 1000)
     cell["mixture"] = {
         "counts": {"red": 20800, "blue": 20500, "green": 20100},
@@ -100,8 +100,10 @@ def test_no_signal_band(tmp_path, capsys):
 
 def test_ipo_cells_are_judged_only_when_named(tmp_path, capsys):
     # online IPO is judged like the ML arm (last iterate), offline IPO like RLHF
-    write_cell(tmp_path, "majority", "ipo", checkpoint_cell({"red": 50, "blue": 900, "green": 50}, 1000))
-    write_cell(tmp_path, "majority", "ipo_offline", checkpoint_cell({"red": 900, "blue": 100}, 1000))
+    online = checkpoint_cell({"red": 50, "blue": 900, "green": 50}, 1000)
+    offline = checkpoint_cell({"red": 900, "blue": 100}, 1000)
+    write_cell(tmp_path, "majority", "ipo", online)
+    write_cell(tmp_path, "majority", "ipo_offline", offline)
     assert verdicts.main(tmp_path, only=["majority/ipo", "majority/ipo_offline"]) == 0
     out = capsys.readouterr().out
     assert "| majority | ipo | checkpoint |" in out and "2/2 cells" in out

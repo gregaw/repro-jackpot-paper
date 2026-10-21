@@ -181,6 +181,7 @@ def test_unparsed_reward_is_one_margin_below_the_worst_colour():
 
 def test_rm_scores_scores_canonical_answers_and_floors_unparsed(monkeypatch):
     import torch
+
     from pipeline.stages import train_rlhf
 
     class Tok:

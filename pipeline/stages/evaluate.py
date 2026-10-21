@@ -2,7 +2,6 @@
 distribution over alternatives -> distributions.json."""
 
 import json
-from pathlib import Path
 
 from pipeline import manifest
 from pipeline.config import prompt_for
@@ -62,17 +61,17 @@ def sample_distribution(model, tokenizer, prompt: str, alternatives: tuple[str, 
                 else:
                     counts[colour] += 1
             done += bsz
-            # heartbeat: eval cells used to emit no log lines at all, leaving
-            # "app stopped" as the only terminal signal on a detached run
+            # heartbeat: without it a detached eval cell logs nothing, and
+            # "app stopped" is the only sign that it finished
             print(f"[{tag}] {done}/{n_samples} sampled "
                   f"({time.monotonic() - t0:.0f}s)", flush=True)
     total = max(1, sum(counts.values()))
     return {
-        # conditional on parsing: P(colour | named a colour) — kept for
-        # comparability with earlier runs, but not what the paper claims
+        # conditional on parsing: P(colour | named a colour), reported for
+        # reference only; not what the paper's claims are about
         "distribution": {alt: counts[alt] / total for alt in alternatives},
         # unconditional: P(colour) over every sample drawn, unparsed included
-        # in the denominator — the quantity the paper's claims are about
+        # in the denominator: the quantity the paper's claims are about
         "distribution_unconditional": {
             alt: counts[alt] / max(1, n_samples) for alt in alternatives
         },

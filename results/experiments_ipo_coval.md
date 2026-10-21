@@ -489,29 +489,28 @@ models that pool across prompts.
 
 ### B.1 The codebase
 
-The code builds on our reproduction of Maura-Rivero et al. Each stage is plain PyTorch and runs
-the same way on a laptop CPU and on a cloud GPU. A thin wrapper dispatches the stages to
-[Modal](https://modal.com) GPUs.
+The code is our reproduction of Maura-Rivero et al. with Online IPO added. Each stage is plain
+PyTorch and runs the same way on a laptop CPU and on a cloud GPU. A thin wrapper dispatches the
+stages to [Modal](https://modal.com) GPUs. Paths are relative to the repository root.
 
 | Path | What it does |
 | --- | --- |
-| `jackpot-paper/pipeline/stages/data_gen.py` | samples voters and colour pairs into preference triplets |
-| `jackpot-paper/pipeline/stages/train_ipo.py` | Online IPO and the offline control (this paper) |
-| `jackpot-paper/pipeline/stages/train_spo.py`, `train_rlhf.py` | the SPO and RLHF baselines |
-| `jackpot-paper/pipeline/stages/evaluate.py` | 1,000 samples from the final checkpoint |
-| `jackpot-paper/pipeline/runner.py` | runs one cell of a stage, skipping finished work |
-| `jackpot-paper/pipeline/modal_app.py` | Modal wrapper: one GPU container per cell, plus an orchestrator |
-| `jackpot-paper/pipeline/config.py` | merges hyperparameters (defaults, profile, per-cell overrides) |
-| `jackpot-paper/configs/qwen.yaml` | the Qwen2.5-0.5B profile used throughout this paper |
-| `jackpot-paper/configs/smoke.yaml` | a tiny-model profile for the CPU end-to-end test |
-| `jackpot-paper/scripts/verdicts.py` | turns evaluation outputs into Table 3 |
-| `jackpot-paper/scripts/fetch_artifacts.py` | downloads a run's results from Modal |
-| `ipo_tabular.py` | the tabular solutions of Table 2 |
-| `coval_stats.py` | the CoVal analysis of Table 7 and the worked example of §6.2 |
-| `make_figures.py` | Figures 1 and 2 from the per-epoch shares in `data/epoch_shares.json` |
+| `pipeline/stages/data_gen.py` | samples voters and colour pairs into preference triplets |
+| `pipeline/stages/train_ipo.py` | Online IPO and the offline control (this paper) |
+| `pipeline/stages/train_spo.py`, `train_rlhf.py` | the SPO and RLHF baselines |
+| `pipeline/stages/evaluate.py` | 1,000 samples from the final checkpoint |
+| `pipeline/runner.py` | runs one cell of a stage, skipping finished work |
+| `pipeline/modal_app.py` | Modal wrapper: one GPU container per cell, plus an orchestrator |
+| `pipeline/config.py` | merges hyperparameters (defaults, profile, per-cell overrides) |
+| `configs/qwen.yaml` | the Qwen2.5-0.5B profile used throughout this paper |
+| `configs/smoke.yaml` | a tiny-model profile for the CPU end-to-end test |
+| `scripts/verdicts.py` | turns evaluation outputs into Table 3 |
+| `scripts/fetch_artifacts.py` | downloads a run's results from Modal |
+| `scripts/ipo_coval/ipo_tabular.py` | the tabular solutions of Table 2 |
+| `scripts/ipo_coval/coval_stats.py` | the CoVal analysis of Table 7 and the worked example of §6.2 |
+| `scripts/ipo_coval/make_figures.py` | Figures 1 and 2 from the per-epoch shares in `scripts/ipo_coval/data/epoch_shares.json` |
 
-The last three scripts are kept with the experiment's working files, outside `jackpot-paper/`. The final setting of §5 is the default in
-`config.py`, so no extra flags are needed to reproduce it.
+The final setting of §5 is the default in `config.py`, so no extra flags are needed to reproduce it.
 
 ### B.2 Environment
 
@@ -519,55 +518,46 @@ Python 3.11 and [uv](https://docs.astral.sh/uv/). The pinned stack is torch 2.4.
 transformers 4.44.2, trl 0.10.1 and peft 0.12.0.
 
 ```bash
-cd jackpot-paper
-uv venv .venv
+uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python -r configs/requirements-gpu.txt modal pytest
 ```
 
 For the GPU runs you also need:
 
-- a Modal account, with `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` set in the environment;
+- a Modal account, signed in with `.venv/bin/modal token new` (or `MODAL_TOKEN_ID` and
+  `MODAL_TOKEN_SECRET` set in the environment);
 - a Modal secret named `huggingface-secret` holding an `HF_TOKEN` (Qwen2.5 is not gated, but the
-  wrapper attaches the secret to every GPU function; Gemma-2-2B needs it);
-- network access to `*.modal.com`, `huggingface.co` and `*.hf.co`.
+  wrapper attaches the secret to every GPU function; Gemma-2-2B needs it).
 
 Results are written to a Modal Volume named `jackpot-artifacts`, created on first use.
-
-**Behind a TLS-intercepting proxy** (for example, a sandboxed cloud environment), two extra steps
-are needed. Modal's gRPC client cannot pass through an HTTP CONNECT proxy, so run Modal commands
-as `env -u HTTPS_PROXY -u https_proxy modal ...`. And Modal only trusts certifi's certificate
-store, so append the proxy's CA bundle to it. `scripts/preflight.sh` at the repository root checks
-both.
 
 ### B.3 Check everything on CPU first
 
 ```bash
-cd jackpot-paper
-.venv/bin/python -m pytest tests/
+.venv/bin/python -m pytest
 ```
 
-This runs the unit tests and an end-to-end test that pushes every method through the whole
-pipeline on a tiny model. It takes under a minute and needs no network. The tests for the scripts
-next to this paper run with `python -m pytest <this folder>`.
+This runs the unit tests, the tests of `scripts/ipo_coval/`, and an end-to-end test that pushes
+every method through the whole pipeline on a tiny model. It takes under a minute and needs no
+network.
 
 ### B.4 Train and evaluate
 
-From `jackpot-paper/`. Each command trains and evaluates the four cells in parallel, one L4 GPU
-per cell, and returns as soon as the job is dispatched. `--detach` keeps the run going after the
-local client exits.
+Each command trains and evaluates the four cells in parallel, one L4 GPU per cell, and returns as
+soon as the job is dispatched. `--detach` keeps the run going after the local client exits.
 
 ```bash
 # Online IPO, final setting (Table 3, column "Online IPO")
-JACKPOT_PROFILE=qwen modal run --detach pipeline/modal_app.py \
+JACKPOT_PROFILE=qwen .venv/bin/modal run --detach pipeline/modal_app.py \
     --stage all --method ipo --run-id ipo-final
 
 # Online IPO at tau 0.1 (Table 3)
 JACKPOT_PROFILE=qwen JACKPOT_TRAIN_OVERRIDES='{"ipo": {"tau": 0.1, "adam_beta1": 0.9, "lr_decay_frac": 0.0}}' \
-    modal run --detach pipeline/modal_app.py --stage all --method ipo --run-id ipo-tau01
+    .venv/bin/modal run --detach pipeline/modal_app.py --stage all --method ipo --run-id ipo-tau01
 
 # Offline control at tau 0.1 (Table 3)
 JACKPOT_PROFILE=qwen JACKPOT_TRAIN_OVERRIDES='{"ipo": {"tau": 0.1, "adam_beta1": 0.9, "lr_decay_frac": 0.0}}' \
-    modal run --detach pipeline/modal_app.py --stage all --method ipo_offline --run-id ipo-tau01
+    .venv/bin/modal run --detach pipeline/modal_app.py --stage all --method ipo_offline --run-id ipo-tau01
 ```
 
 `JACKPOT_TRAIN_OVERRIDES` merges JSON over the defaults; the offline control inherits the `ipo`
@@ -579,9 +569,9 @@ example `{"ipo": {"tau": 0.02, "adam_beta1": 0.9, "lr_decay_frac": 0.0}}`. IPO-M
 Check progress, then download and judge the results:
 
 ```bash
-JACKPOT_PROFILE=qwen modal run pipeline/modal_app.py --stage status --run-id ipo-final
-modal run scripts/fetch_artifacts.py --run-id ipo-final --dest results/ipo-final
-.venv/bin/python scripts/verdicts.py results/ipo-final/eval \
+JACKPOT_PROFILE=qwen .venv/bin/modal run pipeline/modal_app.py --stage status --run-id ipo-final
+.venv/bin/modal run scripts/fetch_artifacts.py --run-id ipo-final --dest results/runs/ipo-final
+.venv/bin/python scripts/verdicts.py results/runs/ipo-final/eval \
     majority/ipo iia_2alt/ipo iia_3alt/ipo cyclic/ipo
 ```
 
@@ -590,15 +580,21 @@ success. Seeds are fixed; re-running a cell reproduced its training trajectory e
 
 ### B.5 Tables 2 and 7, the worked example, and the figures
 
-All three run on CPU from the folder that holds those scripts.
+All three run on CPU in seconds to a minute. The CoVal data is not included; the `curl` line
+downloads it next to the scripts.
 
 ```bash
-python ipo_tabular.py                                   # Table 2, a few seconds
-curl -LO https://huggingface.co/datasets/openai/coval/resolve/main/comparisons.jsonl
-python coval_stats.py . --boot 200                      # Table 7, about a minute
-python coval_stats.py . --example fb9016a9-0814-5c83-91cd-1c3c6fb20462 --boot 1000   # §6.2
-python make_figures.py                                  # Figures 1 and 2
+.venv/bin/python scripts/ipo_coval/ipo_tabular.py                 # Table 2
+curl -L -o scripts/ipo_coval/comparisons.jsonl \
+    https://huggingface.co/datasets/openai/coval/resolve/main/comparisons.jsonl
+.venv/bin/python scripts/ipo_coval/coval_stats.py scripts/ipo_coval --boot 200      # Table 7
+.venv/bin/python scripts/ipo_coval/coval_stats.py scripts/ipo_coval \
+    --example fb9016a9-0814-5c83-91cd-1c3c6fb20462 --boot 1000                      # §6.2
+.venv/bin/python scripts/ipo_coval/make_figures.py                # Figures 1 and 2
 ```
+
+`make_figures.py` writes `fig_training.png` and `fig_cyclic.png` next to itself; the copies in
+`results/` are the ones shown above.
 
 ### B.6 Time and cost
 

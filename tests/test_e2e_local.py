@@ -3,8 +3,8 @@ in-process tokenizer. No GPU, no network, no credentials. Checks wiring, not res
 
 from pipeline import manifest
 from pipeline.config import load_profile
-from pipeline.runner import run_pipeline, status
 from pipeline.populations import CONFIGS
+from pipeline.runner import run_pipeline, status
 from pipeline.storage import Storage
 
 

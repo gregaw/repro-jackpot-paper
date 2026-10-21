@@ -3,3 +3,5 @@ __pycache__/
 results/runs/
 exports/
 .pytest_cache/
+scripts/ipo_coval/comparisons.jsonl
+scripts/ipo_coval/fig_*.png

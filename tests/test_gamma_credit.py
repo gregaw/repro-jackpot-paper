@@ -11,13 +11,10 @@ runs with gamma 1.0 and a trained value head.
 import torch
 
 from pipeline.config import load_profile, train_params
-from pipeline.stages import train_common as tc
 
 
 def make_trainer(gamma: float):
-    from trl import PPOConfig
-
-    from trl import PPOTrainer
+    from trl import PPOConfig, PPOTrainer
 
     t = PPOTrainer.__new__(PPOTrainer)   # compute_rewards/advantages touch only config + kl_ctl
     t.config = PPOConfig(batch_size=2, mini_batch_size=2, gamma=gamma)

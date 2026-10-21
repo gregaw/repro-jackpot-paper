@@ -26,7 +26,8 @@ def price(cost: dict) -> float:
 
 
 def report(root: Path) -> tuple[str, float]:
-    costs = [(p.relative_to(root), json.loads(p.read_text())) for p in sorted(root.rglob("cost.json"))]
+    costs = [(p.relative_to(root), json.loads(p.read_text()))
+             for p in sorted(root.rglob("cost.json"))]
     lines = [f"## {root}", "", "| cell | gpu | duration | cost |", "|---|---|---|---|"]
     total = 0.0
     for rel, c in costs:

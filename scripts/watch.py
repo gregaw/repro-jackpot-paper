@@ -4,7 +4,7 @@ before matching log text.
 
 Each poll prints the latest trainer step line; it alerts on degeneration
 (unparsed >= threshold for 3 consecutive logged steps past step 5) and on error
-lines, and exits when the app ends — code 0 if the optional --pattern status
+lines, and exits when the app ends: code 0 if the optional --pattern status
 target completed, 2 if the app stopped without completing.
 
 Usage:
